@@ -1,0 +1,7 @@
+stages:
+  - validate
+
+validate:structure:
+  stage: validate
+  script:
+    - echo "Project scaffold validation placeholder"

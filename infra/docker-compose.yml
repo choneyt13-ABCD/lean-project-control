@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lean-project-control-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lean_project_control}
+      POSTGRES_USER: ${POSTGRES_USER:-lean_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a local .env file.}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - lean_project_control_postgres_data:/var/lib/postgresql/data
+      - ../database/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/10_initial_schema.sql:ro
+      - ../database/seeds/001_reference_data.sql:/docker-entrypoint-initdb.d/20_reference_data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  lean_project_control_postgres_data:

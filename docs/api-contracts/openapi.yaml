@@ -1,0 +1,338 @@
+openapi: 3.1.0
+info:
+  title: Lean Project Control API
+  version: 0.1.0-draft
+  description: |
+    Phase 2 contract for the RRMS pilot. This document defines interfaces only;
+    it does not implement authentication, a database connection, or a web application.
+    TODO (PM Decision): approve role mappings, workflow SLAs, and import update behavior before implementation.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Projects
+  - name: People
+  - name: RBAC
+  - name: Project Members
+  - name: WBS and Tasks
+  - name: Assignments
+  - name: Weekly Updates
+  - name: Evidence
+  - name: RAID
+  - name: Change Requests
+  - name: Imports
+  - name: Audit Logs
+paths:
+  /projects:
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      x-required-permissions: [project.view]
+      x-data-scope: Platform Admin all; PM/PMO portfolio/project scope; all others assigned-project scope.
+      responses:
+        '200': { description: Project list, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } }
+    post:
+      tags: [Projects]
+      operationId: createProject
+      x-required-permissions: [project.create]
+      x-data-scope: PM/PMO; Platform Admin only if explicitly granted by RBAC configuration.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectInput' } } } }
+      responses:
+        '201': { description: Project created, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /projects/{projectId}:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get:
+      tags: [Projects]
+      operationId: getProject
+      x-required-permissions: [project.view]
+      x-data-scope: Assigned project or portfolio scope.
+      responses: { '200': { description: Project, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+    patch:
+      tags: [Projects]
+      operationId: updateProject
+      x-required-permissions: [project.edit]
+      x-data-scope: Project scope. Baseline-controlled fields require an approved Change Request; TODO (PM Decision): confirm exact fields and approver.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectInput' } } } }
+      responses: { '200': { description: Project updated, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+    delete:
+      tags: [Projects]
+      operationId: deleteProject
+      x-required-permissions: [project.delete]
+      x-data-scope: Only the active Main PM of this exact project, regardless of other role grants.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectDeletionInput' } } } }
+      responses:
+        '204': { description: Project soft-deleted and Audit Log created in the same transaction. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: Reason missing or caller is not Main PM. }
+  /people:
+    get:
+      tags: [People]
+      operationId: listPeople
+      x-required-permissions: [people.view]
+      x-data-scope: Platform Admin all; other roles only matrix-allowed/self scope.
+      responses: { '200': { description: People list, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } }
+    post:
+      tags: [People]
+      operationId: createPerson
+      x-required-permissions: [people.create]
+      x-data-scope: Platform Admin.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PersonInput' } } } }
+      responses: { '201': { description: Person created }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /people/{personId}:
+    parameters: [{ $ref: '#/components/parameters/PersonId' }]
+    patch:
+      tags: [People]
+      operationId: updatePerson
+      x-required-permissions: [people.edit]
+      x-data-scope: Platform Admin; Team Member self/basic profile scope only where configured.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PersonInput' } } } }
+      responses: { '200': { description: Person updated }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /roles:
+    get:
+      tags: [RBAC]
+      operationId: listRoles
+      x-required-permissions: [rbac.view]
+      x-data-scope: Platform Admin all; PM/PMO and Reviewer view according to RBAC Matrix.
+      responses: { '200': { description: Role list, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } }
+    post:
+      tags: [RBAC]
+      operationId: createRole
+      x-required-permissions: [rbac.manage]
+      x-data-scope: Platform Admin.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleInput' } } } }
+      responses: { '201': { description: Role created and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /roles/{roleId}/permissions:
+    parameters: [{ $ref: '#/components/parameters/RoleId' }]
+    put:
+      tags: [RBAC]
+      operationId: replaceRolePermissions
+      x-required-permissions: [rbac.manage]
+      x-data-scope: Platform Admin; project-scoped RBAC changes are TODO (PM Decision).
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RolePermissionsInput' } } } }
+      responses: { '200': { description: Role permissions replaced and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /user-roles:
+    post:
+      tags: [RBAC]
+      operationId: assignUserRole
+      x-required-permissions: [rbac.manage]
+      x-data-scope: Platform Admin; TODO (PM Decision): confirm PM/PMO project-role maintenance scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UserRoleInput' } } } }
+      responses: { '201': { description: User role assigned and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /projects/{projectId}/members:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get:
+      tags: [Project Members]
+      operationId: listProjectMembers
+      x-required-permissions: [project.view]
+      x-data-scope: Assigned project scope.
+      responses: { '200': { description: Project member list, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } }
+    post:
+      tags: [Project Members]
+      operationId: addProjectMember
+      x-required-permissions: [assignment.create]
+      x-data-scope: PM/PMO or Project Admin within assigned project; lead scope follows RBAC Matrix.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectMemberInput' } } } }
+      responses: { '201': { description: Project member added and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /projects/{projectId}/wbs:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get:
+      tags: [WBS and Tasks]
+      operationId: listWbs
+      x-required-permissions: [wbs.view]
+      x-data-scope: Assigned project/workstream/task scope.
+      responses: { '200': { description: WBS hierarchy, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } }
+    post:
+      tags: [WBS and Tasks]
+      operationId: createWbsItem
+      x-required-permissions: [wbs.create]
+      x-data-scope: PM/PMO, Project Admin, or assigned Lead scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WbsInput' } } } }
+      responses: { '201': { description: WBS item created and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /projects/{projectId}/tasks:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get:
+      tags: [WBS and Tasks]
+      operationId: listTasks
+      x-required-permissions: [task.view]
+      x-data-scope: Assigned project/workstream/task scope.
+      responses: { '200': { description: Task list, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } }
+    post:
+      tags: [WBS and Tasks]
+      operationId: createTask
+      x-required-permissions: [task.create]
+      x-data-scope: PM/PMO, Project Admin, or assigned Lead scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskInput' } } } }
+      responses: { '201': { description: Task created and audited }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { description: Hierarchy, membership, or completion validation failed. } }
+  /tasks/{taskId}:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    patch:
+      tags: [WBS and Tasks]
+      operationId: updateTask
+      x-required-permissions: [task.edit]
+      x-data-scope: Assigned project/workstream/task scope; Team Member can edit own assigned task only where matrix permits.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskInput' } } } }
+      responses: { '200': { description: Task updated and audited }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { description: Definition of Done or baseline validation failed. } }
+  /tasks/{taskId}/assignments:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    get:
+      tags: [Assignments]
+      operationId: listTaskAssignments
+      x-required-permissions: [assignment.view]
+      x-data-scope: Assigned project/workstream/task scope.
+      responses: { '200': { description: Task assignments, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } }
+    post:
+      tags: [Assignments]
+      operationId: createTaskAssignment
+      x-required-permissions: [assignment.create]
+      x-data-scope: PM/PMO, Project Admin, or assigned Lead scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskAssignmentInput' } } } }
+      responses: { '201': { description: Assignment created and audited }, '422': { description: Person is not an active project member or Owner is missing. } }
+  /tasks/{taskId}/dependencies:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    post:
+      tags: [WBS and Tasks]
+      operationId: createTaskDependency
+      x-required-permissions: [task.edit]
+      x-data-scope: Project Admin or permitted lead scope in the same project.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TaskDependencyInput' } } } }
+      responses: { '201': { description: Dependency created and audited }, '422': { description: Self, cross-project, or circular dependency rejected. } }
+  /tasks/{taskId}/weekly-updates:
+    parameters: [{ $ref: '#/components/parameters/TaskId' }]
+    post:
+      tags: [Weekly Updates]
+      operationId: submitWeeklyUpdate
+      x-required-permissions: [weekly_update.submit]
+      x-data-scope: Assigned user, or authorized lead/admin within assigned project/workstream.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WeeklyUpdateInput' } } } }
+      responses: { '201': { description: Weekly update submitted and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /weekly-updates/{weeklyUpdateId}/review:
+    parameters: [{ $ref: '#/components/parameters/WeeklyUpdateId' }]
+    post:
+      tags: [Weekly Updates]
+      operationId: reviewWeeklyUpdate
+      x-required-permissions: [weekly_update.review]
+      x-data-scope: Reviewer or authorized lead/admin in task scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReviewInput' } } } }
+      responses: { '200': { description: Review saved and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /evidence:
+    post:
+      tags: [Evidence]
+      operationId: createEvidenceMetadata
+      x-required-permissions: [evidence.create]
+      x-data-scope: Assigned task/project scope; Team Member own assigned-task scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EvidenceInput' } } } }
+      responses: { '201': { description: Evidence metadata created and audited. Binary upload is out of scope. }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /evidence/{evidenceId}/review:
+    parameters: [{ $ref: '#/components/parameters/EvidenceId' }]
+    post:
+      tags: [Evidence]
+      operationId: reviewEvidence
+      x-required-permissions: [evidence.approve]
+      x-data-scope: Authorized lead, Project Admin, PM/PMO, or Reviewer according to task/project scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReviewInput' } } } }
+      responses: { '200': { description: Evidence review saved and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /projects/{projectId}/raid-items:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get:
+      tags: [RAID]
+      operationId: listRaidItems
+      x-required-permissions: [raid.view]
+      x-data-scope: Assigned project/workstream scope.
+      responses: { '200': { description: RAID list, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } }
+    post:
+      tags: [RAID]
+      operationId: createRaidItem
+      x-required-permissions: [raid.create]
+      x-data-scope: Authorized project role according to RBAC Matrix.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RaidItemInput' } } } }
+      responses: { '201': { description: RAID item created and audited }, '422': { description: Risk probability/impact validation failed. } }
+  /raid-items/{raidItemId}:
+    parameters: [{ $ref: '#/components/parameters/RaidItemId' }]
+    patch:
+      tags: [RAID]
+      operationId: updateRaidItem
+      x-required-permissions: [raid.edit]
+      x-data-scope: Authorized project/workstream scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RaidItemInput' } } } }
+      responses: { '200': { description: RAID item updated and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /projects/{projectId}/change-requests:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get:
+      tags: [Change Requests]
+      operationId: listChangeRequests
+      x-required-permissions: [change_request.view]
+      x-data-scope: Assigned project scope.
+      responses: { '200': { description: Change request list, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } } }
+    post:
+      tags: [Change Requests]
+      operationId: createChangeRequest
+      x-required-permissions: [change_request.create]
+      x-data-scope: TODO (PM Decision): confirm requestor roles and approval authority.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ChangeRequestInput' } } } }
+      responses: { '201': { description: Change Request created and audited } }
+  /change-requests/{changeRequestId}/decision:
+    parameters: [{ $ref: '#/components/parameters/ChangeRequestId' }]
+    post:
+      tags: [Change Requests]
+      operationId: decideChangeRequest
+      x-required-permissions: [change_request.approve]
+      x-data-scope: TODO (PM Decision): confirm approver role, including Sponsor/Steering Committee if required.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } } }
+      responses: { '200': { description: Decision saved and audited }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /projects/{projectId}/imports/wbs-tasks/validate:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    post:
+      tags: [Imports]
+      operationId: validateWbsTaskImport
+      x-required-permissions: [import.validate]
+      x-data-scope: PM/PMO, Project Admin, or assigned Lead in project scope.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ImportValidationInput' } } } }
+      responses: { '200': { description: Validation results; no records are saved, content: { application/json: { schema: { $ref: '#/components/schemas/ImportValidationResult' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /audit-logs:
+    get:
+      tags: [Audit Logs]
+      operationId: listAuditLogs
+      x-required-permissions: [audit_log.view]
+      x-data-scope: Platform Admin all; other roles only their permitted project/assigned scope; Team Member has no default access.
+      parameters: [{ name: projectId, in: query, schema: { type: string, format: uuid } }, { name: entityType, in: query, schema: { type: string } }]
+      responses: { '200': { description: Append-only audit log list, content: { application/json: { schema: { $ref: '#/components/schemas/Collection' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT, description: Placeholder only; real authentication is out of scope. }
+  parameters:
+    ProjectId: { name: projectId, in: path, required: true, schema: { type: string, format: uuid } }
+    PersonId: { name: personId, in: path, required: true, schema: { type: string, format: uuid } }
+    RoleId: { name: roleId, in: path, required: true, schema: { type: string, format: uuid } }
+    TaskId: { name: taskId, in: path, required: true, schema: { type: string, format: uuid } }
+    WeeklyUpdateId: { name: weeklyUpdateId, in: path, required: true, schema: { type: string, format: uuid } }
+    EvidenceId: { name: evidenceId, in: path, required: true, schema: { type: string, format: uuid } }
+    RaidItemId: { name: raidItemId, in: path, required: true, schema: { type: string, format: uuid } }
+    ChangeRequestId: { name: changeRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Forbidden: { description: Permission or data-scope check failed. }
+    Conflict: { description: Duplicate or conflicting state. }
+  schemas:
+    Collection: { type: object, required: [data], properties: { data: { type: array, items: { type: object } }, nextCursor: { type: [string, 'null'] } } }
+    Project: { type: object, required: [projectId, projectCode, projectName, mainPmPersonId, projectStatus], properties: { projectId: { type: string, format: uuid }, projectCode: { type: string }, projectName: { type: string }, mainPmPersonId: { type: string, format: uuid }, projectStatus: { type: string }, ragStatus: { type: [string, 'null'], enum: [Red, Amber, Green, null] } } }
+    ProjectInput: { type: object, required: [projectCode, projectName, mainPmPersonId], properties: { projectCode: { type: string }, projectName: { type: string }, portfolioName: { type: string }, mainPmPersonId: { type: string, format: uuid }, projectStatus: { type: string }, startDate: { type: string, format: date }, targetEndDate: { type: string, format: date } } }
+    ProjectDeletionInput: { type: object, required: [reason], properties: { reason: { type: string, minLength: 1, maxLength: 2000 } } }
+    PersonInput: { type: object, required: [employeeCode, displayName, email, personStatus], properties: { employeeCode: { type: string }, displayName: { type: string }, email: { type: string, format: email }, department: { type: string }, positionTitle: { type: string }, personStatus: { type: string } } }
+    RoleInput: { type: object, required: [roleCode, roleName, scopeType], properties: { roleCode: { type: string }, roleName: { type: string }, scopeType: { type: string } } }
+    RolePermissionsInput: { type: object, required: [permissionIds], properties: { permissionIds: { type: array, items: { type: string, format: uuid } } } }
+    UserRoleInput: { type: object, required: [userAccountId, roleId], properties: { userAccountId: { type: string, format: uuid }, roleId: { type: string, format: uuid }, projectId: { type: string, format: uuid }, workstreamCode: { type: string } } }
+    ProjectMemberInput: { type: object, required: [personId, projectRole], properties: { personId: { type: string, format: uuid }, projectRole: { type: string }, isMainPm: { type: boolean } } }
+    WbsInput: { type: object, required: [wbsCode, wbsName], properties: { parentWbsItemId: { type: string, format: uuid }, wbsCode: { type: string }, wbsName: { type: string }, sortOrder: { type: number } } }
+    TaskInput: { type: object, required: [wbsItemId, taskCode, taskType, taskName, ownerPersonId, status, progress, evidenceRequired], properties: { wbsItemId: { type: string, format: uuid }, parentTaskId: { type: string, format: uuid }, taskCode: { type: string }, taskType: { type: string, enum: [MainTask, Task, Subtask] }, taskName: { type: string }, ownerPersonId: { type: string, format: uuid }, plannedStartDate: { type: string, format: date }, plannedDueDate: { type: string, format: date }, actualStartDate: { type: string, format: date }, actualFinishDate: { type: string, format: date }, status: { type: string }, progress: { type: number, minimum: 0, maximum: 100 }, weight: { type: number, minimum: 0, maximum: 100 }, evidenceRequired: { type: boolean } } }
+    TaskAssignmentInput: { type: object, required: [personId, assignmentRole], properties: { personId: { type: string, format: uuid }, assignmentRole: { type: string, enum: [Owner, BA, DEV, QA, Reviewer, Contributor, Observer] }, raciRole: { type: string, enum: [Responsible, Accountable, Consulted, Informed] }, allocationPercent: { type: number, minimum: 0, maximum: 100 }, isPrimary: { type: boolean } } }
+    TaskDependencyInput: { type: object, required: [successorTaskId], properties: { successorTaskId: { type: string, format: uuid }, dependencyType: { type: string, enum: [FS, SS, FF, SF] }, lagDays: { type: integer } } }
+    WeeklyUpdateInput: { type: object, required: [weekStartDate, progress, status, ragStatus, summary], properties: { weekStartDate: { type: string, format: date }, progress: { type: number, minimum: 0, maximum: 100 }, status: { type: string }, ragStatus: { type: string, enum: [Red, Amber, Green] }, summary: { type: string, minLength: 1, maxLength: 2000 }, blocker: { type: string }, nextStep: { type: string } } }
+    EvidenceInput: { type: object, required: [relatedEntityType, relatedEntityId, fileName, storageRef], properties: { relatedEntityType: { type: string, enum: [Project, WBS, Task, WeeklyUpdate, RAID] }, relatedEntityId: { type: string, format: uuid }, fileName: { type: string }, fileType: { type: string }, storageRef: { type: string, description: Pointer only; must not contain credentials. } } }
+    RaidItemInput: { type: object, required: [raidCode, raidType, title, ownerPersonId], properties: { raidCode: { type: string }, raidType: { type: string, enum: [Risk, Assumption, Issue, Dependency] }, title: { type: string }, description: { type: string }, ownerPersonId: { type: string, format: uuid }, probability: { type: integer, minimum: 1, maximum: 5 }, impact: { type: integer, minimum: 1, maximum: 5 }, mitigationPlan: { type: string }, escalationTriggerScore: { type: integer, minimum: 1, maximum: 25 }, dueDate: { type: string, format: date }, status: { type: string } } }
+    ChangeRequestInput: { type: object, required: [changeType, reason], properties: { baselineVersionId: { type: string, format: uuid }, changeType: { type: string, enum: [Scope, DueDate, Weight, Ownership, Baseline, Other] }, reason: { type: string }, impactAnalysis: { type: string } } }
+    ImportValidationInput: { type: object, required: [rows], properties: { rows: { type: array, items: { type: object, additionalProperties: true }, description: Rows matching import-template-spec.md; no records are persisted. } } }
+    ImportValidationResult: { type: object, required: [valid, errors], properties: { valid: { type: boolean }, errors: { type: array, items: { type: object, required: [code, row, message], properties: { code: { type: string }, row: { type: integer }, column: { type: string }, message: { type: string } } } } } }
+    ReviewInput: { type: object, required: [status], properties: { status: { type: string, enum: [Reviewed, Rejected, Accepted] }, comment: { type: string } } }
+    DecisionInput: { type: object, required: [approvalStatus], properties: { approvalStatus: { type: string, enum: [Approved, Rejected] }, comment: { type: string } } }

@@ -549,6 +549,42 @@ seedStandardWorkstreams(secondProjectId);
 seedStandardRoles(defaultProjectId);
 seedStandardRoles(secondProjectId);
 
+async function syncAllProjectsIfMissing() {
+  const syncSqlPath = path.join(root, 'database/sync_all_projects_to_supabase.sql');
+  if (!fs.existsSync(syncSqlPath)) return;
+  const sqlContent = fs.readFileSync(syncSqlPath, 'utf8');
+
+  // 1. Sync to SQLite (for local walkthrough/render routes)
+  try {
+    const hasEdoc = db.prepare("SELECT 1 FROM projects WHERE project_code = 'EDOC-2026'").get();
+    if (!hasEdoc) {
+      db.exec(sqlContent);
+      console.info('[db] Synced all local projects (e-Doc, CSI, Loca, RRMS, DTP) to SQLite.');
+    }
+  } catch (err) {
+    console.warn('[db] Note on SQLite project sync:', err.message);
+  }
+
+  // 2. Sync to PostgreSQL (Supabase)
+  if (pgPool) {
+    try {
+      const res = await pgPool.query("SELECT 1 FROM projects WHERE project_code = 'EDOC-2026'");
+      if (!res.rows.length) {
+        await pgPool.query(sqlContent);
+        console.info('[db] Synced all local projects (e-Doc, CSI, Loca, RRMS, DTP) to Supabase PostgreSQL.');
+      }
+    } catch (err) {
+      console.warn('[db] Note on PostgreSQL project sync:', err.message);
+    }
+  }
+}
+
+// In production/cloud environments, automatically sync all mock projects (e-Doc, CSI, Loca)
+// Skip during isolated smoke testing where exactly 2 demo projects are expected.
+if (!allowDemoIdentityOverride && process.env.NODE_ENV !== 'test') {
+  syncAllProjectsIfMissing();
+}
+
 function rollupTaskProgress(parentTaskId) {
   if (!parentTaskId) return;
   const parent = db.prepare('SELECT * FROM tasks WHERE task_id = ? AND deleted_at IS NULL').get(parentTaskId);

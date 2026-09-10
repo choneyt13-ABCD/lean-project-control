@@ -23,15 +23,12 @@ function sqlVal(val, isBoolean = false) {
 
 const out = [];
 out.push('-- =============================================================================');
-out.push('-- Lean Project Control: Supplemental Projects (e-Doc, CSI, Loca)');
+out.push('-- Lean Project Control: Full Data Sync (e-Doc, CSI, Loca, RRMS-2026, DTP)');
+out.push('-- Safe to execute in both PostgreSQL (Supabase) and SQLite');
 out.push('-- =============================================================================\n');
 
-// 1. People (exclude baseline demo accounts to preserve smoke tests and identities)
-const people = db.prepare(`
-  SELECT * FROM people 
-  WHERE deleted_at IS NULL 
-    AND person_id NOT IN ('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002')
-`).all();
+// 1. People
+const people = db.prepare('SELECT * FROM people WHERE deleted_at IS NULL').all();
 out.push('-- 1. People');
 for (const p of people) {
   out.push(`INSERT INTO people (person_id, employee_code, display_name, email, department, position_title, person_status)
@@ -44,11 +41,8 @@ ON CONFLICT (person_id) DO UPDATE SET
   position_title = EXCLUDED.position_title;`);
 }
 
-// 2. Projects (exclude baseline demo projects RRMS & DTP)
-const projects = db.prepare(`
-  SELECT * FROM projects 
-  WHERE project_id NOT IN ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002')
-`).all();
+// 2. Projects
+const projects = db.prepare('SELECT * FROM projects WHERE deleted_at IS NULL').all();
 out.push('\n-- 2. Projects');
 for (const prj of projects) {
   out.push(`INSERT INTO projects (project_id, project_code, project_name, portfolio_name, project_type, project_size, main_pm_person_id, project_status, rag_status, start_date, target_end_date)
@@ -66,19 +60,18 @@ ON CONFLICT (project_id) DO UPDATE SET
   target_end_date = EXCLUDED.target_end_date;`);
 }
 
-// Ensure demo PM is also member of all projects so they appear in portfolio view
+// Ensure logged-in actor (PM: 20000000-0000-0000-0000-000000000001 & 685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af) are members of all projects
 for (const prj of projects) {
   out.push(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm)
 VALUES ('99990000-${prj.project_id.slice(9)}', ${sqlVal(prj.project_id)}, '20000000-0000-0000-0000-000000000001', 'PM', false)
-ON CONFLICT DO NOTHING;`);
+ON CONFLICT (project_member_id) DO NOTHING;`);
+  out.push(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm)
+VALUES ('99980000-${prj.project_id.slice(9)}', ${sqlVal(prj.project_id)}, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'PM', false)
+ON CONFLICT (project_member_id) DO NOTHING;`);
 }
 
 // 3. Project Members
-const members = db.prepare(`
-  SELECT * FROM project_members 
-  WHERE deleted_at IS NULL 
-    AND project_id NOT IN ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002')
-`).all();
+const members = db.prepare('SELECT * FROM project_members WHERE deleted_at IS NULL').all();
 out.push('\n-- 3. Project Members');
 for (const m of members) {
   out.push(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
@@ -87,11 +80,7 @@ ON CONFLICT (project_member_id) DO NOTHING;`);
 }
 
 // 4. Project Phases
-const phases = db.prepare(`
-  SELECT * FROM project_phases 
-  WHERE deleted_at IS NULL 
-    AND project_id NOT IN ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002')
-`).all();
+const phases = db.prepare('SELECT * FROM project_phases WHERE deleted_at IS NULL').all();
 out.push('\n-- 4. Project Phases');
 for (const ph of phases) {
   out.push(`INSERT INTO project_phases (phase_id, project_id, phase_code, phase_name, sort_order, planned_start_date, planned_due_date)
@@ -105,11 +94,7 @@ ON CONFLICT (phase_id) DO UPDATE SET
 }
 
 // 5. WBS Items
-const wbs = db.prepare(`
-  SELECT * FROM wbs_items 
-  WHERE deleted_at IS NULL 
-    AND project_id NOT IN ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002')
-`).all();
+const wbs = db.prepare('SELECT * FROM wbs_items WHERE deleted_at IS NULL').all();
 out.push('\n-- 5. WBS Items');
 for (const w of wbs) {
   out.push(`INSERT INTO wbs_items (wbs_item_id, project_id, phase_id, wbs_code, wbs_name, sort_order)
@@ -121,13 +106,9 @@ ON CONFLICT (wbs_item_id) DO UPDATE SET
   sort_order = EXCLUDED.sort_order;`);
 }
 
-// 6. Tasks
-const tasks = db.prepare(`
-  SELECT * FROM tasks 
-  WHERE deleted_at IS NULL 
-    AND project_id NOT IN ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002')
-`).all();
-out.push('\n-- 6. Tasks');
+// 6. Tasks (All Work Items)
+const tasks = db.prepare('SELECT * FROM tasks WHERE deleted_at IS NULL').all();
+out.push('\n-- 6. Tasks (All Work Items)');
 for (const t of tasks) {
   out.push(`INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
 VALUES (${sqlVal(t.task_id)}, ${sqlVal(t.project_id)}, ${sqlVal(t.wbs_item_id)}, ${sqlVal(t.parent_task_id)}, ${sqlVal(t.task_code)}, ${sqlVal(t.task_type)}, ${sqlVal(t.task_name)}, ${sqlVal(t.description)}, ${sqlVal(t.owner_person_id)}, ${sqlVal(t.planned_start_date)}, ${sqlVal(t.planned_due_date)}, ${sqlVal(t.actual_start_date)}, ${sqlVal(t.actual_end_date)}, ${sqlVal(t.status || 'NotStarted')}, ${sqlVal(t.rag_status || 'Green')}, ${t.weight || 1}, ${t.progress || 0}, ${sqlVal(t.evidence_required, true)}, ${sqlVal(t.workstream)})
@@ -155,8 +136,7 @@ ON CONFLICT (task_id) DO UPDATE SET
 const assignments = db.prepare(`
   SELECT ta.* FROM task_assignments ta
   JOIN tasks t ON t.task_id = ta.task_id
-  WHERE ta.deleted_at IS NULL 
-    AND t.project_id NOT IN ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000002')
+  WHERE ta.deleted_at IS NULL
 `).all();
 out.push('\n-- 7. Task Assignments');
 for (const a of assignments) {
@@ -165,6 +145,33 @@ VALUES (${sqlVal(a.task_assignment_id)}, ${sqlVal(a.task_id)}, ${sqlVal(a.person
 ON CONFLICT (task_assignment_id) DO NOTHING;`);
 }
 
+// 8. Weekly Updates
+const weeklyUpdates = db.prepare('SELECT * FROM weekly_updates WHERE deleted_at IS NULL').all();
+out.push('\n-- 8. Weekly Updates');
+for (const wu of weeklyUpdates) {
+  out.push(`INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES (${sqlVal(wu.weekly_update_id)}, ${sqlVal(wu.task_id)}, ${sqlVal(wu.week_start_date)}, ${wu.progress || 0}, ${sqlVal(wu.status || 'NotStarted')}, ${sqlVal(wu.rag_status || 'Green')}, ${sqlVal(wu.submitted_by_person_id)})
+ON CONFLICT (weekly_update_id) DO NOTHING;`);
+}
+
+// 9. Task Notes
+const notes = db.prepare('SELECT * FROM task_notes WHERE deleted_at IS NULL').all();
+out.push('\n-- 9. Task Notes');
+for (const n of notes) {
+  out.push(`INSERT INTO task_notes (task_note_id, task_id, note_type, note_text, created_by_person_id)
+VALUES (${sqlVal(n.task_note_id)}, ${sqlVal(n.task_id)}, ${sqlVal(n.note_type || 'Note')}, ${sqlVal(n.note_text)}, ${sqlVal(n.created_by_person_id)})
+ON CONFLICT (task_note_id) DO NOTHING;`);
+}
+
+// 10. RAID Items
+const raid = db.prepare('SELECT * FROM raid_items WHERE deleted_at IS NULL').all();
+out.push('\n-- 10. RAID Items');
+for (const r of raid) {
+  out.push(`INSERT INTO raid_items (raid_item_id, project_id, item_code, raid_type, title, description, impact, probability, mitigation_plan, owner_person_id, due_date, status)
+VALUES (${sqlVal(r.raid_item_id)}, ${sqlVal(r.project_id)}, ${sqlVal(r.item_code)}, ${sqlVal(r.raid_type)}, ${sqlVal(r.title)}, ${sqlVal(r.description)}, ${r.impact || 'NULL'}, ${r.probability || 'NULL'}, ${sqlVal(r.mitigation_plan)}, ${sqlVal(r.owner_person_id)}, ${sqlVal(r.due_date)}, ${sqlVal(r.status || 'Open')})
+ON CONFLICT (raid_item_id) DO NOTHING;`);
+}
+
 const outputPath = path.join(root, 'database/sync_all_projects_to_supabase.sql');
 fs.writeFileSync(outputPath, out.join('\n'), 'utf8');
-console.log('Successfully generated clean supplemental projects:', outputPath);
+console.log('Successfully generated full data sync with ALL work items:', outputPath);

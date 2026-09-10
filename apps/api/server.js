@@ -24,6 +24,16 @@ let pgPool = null; // pg.Pool — populated only when DATABASE_PROVIDER=postgres
 
 const databaseUrl = process.env.DATABASE_URL || 'file:./data/lean-project-control.db';
 
+function ensureSqliteInitialized(databaseInstance) {
+  const hasWbs = databaseInstance.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wbs_items'").get();
+  if (!hasWbs) {
+    const schemaPath = path.join(root, 'database/sqlite/migrations/001_initial_schema.sql');
+    const seedPath = path.join(root, 'database/sqlite/seeds/001_reference_data.sql');
+    if (fs.existsSync(schemaPath)) databaseInstance.exec(fs.readFileSync(schemaPath, 'utf8'));
+    if (fs.existsSync(seedPath)) databaseInstance.exec(fs.readFileSync(seedPath, 'utf8'));
+  }
+}
+
 if (databaseProvider === 'postgres') {
   // Validate the PostgreSQL connection string.
   if (!databaseUrl.startsWith('postgres://') && !databaseUrl.startsWith('postgresql://')) {
@@ -36,26 +46,14 @@ if (databaseProvider === 'postgres') {
   const client = await pgPool.connect();
   client.release();
   console.info('[db] Connected to PostgreSQL. Existing routes still use SQLite during transition.');
-  // In postgres mode the app still needs a local SQLite file for seed/demo
-  // helpers that have not yet been migrated. Fall through to open it below.
-  // If no local file exists, skip opening SQLite (pure-postgres deployment).
-  const sqliteFallbackUrl = process.env.SQLITE_FALLBACK_URL;
-  if (sqliteFallbackUrl && sqliteFallbackUrl.startsWith('file:')) {
-    const fallbackPath = path.isAbsolute(sqliteFallbackUrl.slice('file:'.length))
-      ? sqliteFallbackUrl.slice('file:'.length)
-      : path.resolve(root, sqliteFallbackUrl.slice('file:'.length));
-    if (fs.existsSync(fallbackPath)) {
-      db = new Database(fallbackPath);
-      db.pragma('foreign_keys = ON');
-      db.pragma('journal_mode = WAL');
-    }
-  }
-  if (!db) {
-    // No SQLite fallback — create an in-memory placeholder so seed helpers
-    // do not crash. They will produce no visible side-effects.
-    db = new Database(':memory:');
-    db.pragma('foreign_keys = ON');
-  }
+
+  // Open/initialize a local SQLite database for existing route handlers
+  const fallbackPath = path.resolve(root, 'data/lean-project-control.db');
+  fs.mkdirSync(path.dirname(fallbackPath), { recursive: true });
+  db = new Database(fallbackPath);
+  db.pragma('foreign_keys = ON');
+  db.pragma('journal_mode = WAL');
+  ensureSqliteInitialized(db);
 } else {
   // Default: SQLite mode — the original, unchanged path.
   if (!databaseUrl.startsWith('file:')) {
@@ -65,12 +63,11 @@ if (databaseProvider === 'postgres') {
   const databasePath = path.isAbsolute(configuredDatabasePath)
     ? configuredDatabasePath
     : path.resolve(root, configuredDatabasePath);
-  if (!fs.existsSync(databasePath)) {
-    throw new Error(`SQLite database not found at ${databasePath}. Follow docs/run-pilot-with-sqlite.md to initialize it.`);
-  }
+  fs.mkdirSync(path.dirname(databasePath), { recursive: true });
   db = new Database(databasePath);
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
+  ensureSqliteInitialized(db);
 }
 
 

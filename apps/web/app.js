@@ -623,15 +623,30 @@ function suggestTaskCode(allTasks, type, projectCode = 'TASK') {
   return `${prefix}${String(maxNum + 1).padStart(3, '0')}`;
 }
 
+function renderOwnerOptions(members, directory = [], selectedId) {
+  const memberList = Array.isArray(members) ? members : [];
+  const dirList = Array.isArray(directory) ? directory : [];
+  const memberIds = new Set(memberList.map((m) => m.person_id));
+  let html = memberList.map((p) => `<option value="${p.person_id}" ${selected(selectedId, p.person_id)}>${p.display_name}${p.employee_code ? ` (${p.employee_code})` : ''}</option>`).join('');
+  const otherPeople = dirList.filter((p) => p.person_status === 'Active' && !memberIds.has(p.person_id));
+  if (otherPeople.length) {
+    html += `<optgroup label="Other team members (Auto-add to project)">` +
+      otherPeople.map((p) => `<option value="${p.person_id}" ${selected(selectedId, p.person_id)}>${p.display_name}${p.employee_code ? ` (${p.employee_code})` : ''}</option>`).join('') +
+      `</optgroup>`;
+  }
+  return html;
+}
+
 async function openTaskModal(context = {}) {
-  const [{ current }, wbs, people, currentTasks, workstreams] = await Promise.all([
+  const [{ current }, wbs, people, allPeople, currentTasks, workstreams] = await Promise.all([
     projectContext(),
     api('/wbs'),
     api('/project-members'),
+    api('/people').catch(() => []),
     api('/tasks'),
     api('/workstreams')
   ]);
-  const members = people;
+  const members = people.length ? people : (allPeople || []).filter((p) => p.person_status === 'Active');
 
   let initialParentId = context.parentTaskId || '';
   let initialParent = initialParentId ? currentTasks.find((t) => t.task_id === initialParentId) : null;
@@ -643,6 +658,7 @@ async function openTaskModal(context = {}) {
   const fixedType = context.taskType || '';
   const fixedActivityId = context.wbsItemId || '';
   const isMainTaskFlow = fixedType === 'MainTask' && Boolean(fixedActivityId);
+  const ownerOptions = renderOwnerOptions(people, allPeople, initialOwnerId);
 
   const renderParentOptions = (level, selectedWbs) => {
     if (level === 'MainTask') {
@@ -667,7 +683,7 @@ async function openTaskModal(context = {}) {
       <label>Activity<select name="wbsItemId">${wbs.map((item) => `<option value="${item.wbs_item_id}" ${selected(initialWbsId, item.wbs_item_id)}>${item.wbs_code} — ${item.wbs_name}</option>`).join('')}</select></label>
       <label class="full" id="parent-task-field">Parent work item<select name="parentTaskId">${renderParentOptions(initialType, initialWbsId)}</select><small class="subtle">Task requires a Main Task parent; Subtask requires a Task parent in the same activity.</small></label>
       <label>Item code<input name="taskCode" required value="${initialCode}" placeholder="e.g. ${initialCode}"></label>
-      <label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(initialOwnerId, person.person_id)}>${person.display_name}</option>`).join('')}</select></label>
+      <label>Owner<select name="ownerPersonId">${ownerOptions}</select></label>
       <label class="full">Work item name<input name="taskName" required placeholder="Describe the deliverable or task"></label>
       <label>Workstream (Master data)<select name="workstream">
         <option value="">None / General</option>
@@ -753,13 +769,16 @@ async function openTaskModal(context = {}) {
 }
 
 async function legacyEditTask(task) {
-  const [people, workstreams] = await Promise.all([api('/project-members'), api('/workstreams')]);
-  const members = people;
+  const [people, allPeople, workstreams] = await Promise.all([
+    api('/project-members'),
+    api('/people').catch(() => []),
+    api('/workstreams')
+  ]);
   const hasChildren = tasks.some((t) => t.parent_task_id === task.task_id);
   modalContent.innerHTML = `<h2 class="form-title">Edit work item</h2>
     <div class="form-grid">
       <label class="full">Work item name<input name="taskName" required value="${task.task_name}"></label>
-      <label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(task.owner_person_id, person.person_id)}>${person.display_name}</option>`).join('')}</select></label>
+      <label>Owner<select name="ownerPersonId">${renderOwnerOptions(people, allPeople, task.owner_person_id)}</select></label>
       <label>Workstream (Master data)<select name="workstream">
         <option value="">None / General</option>
         ${workstreams.map((ws) => `<option value="${ws.workstream_name}" ${selected(task.workstream, ws.workstream_name)}>${ws.workstream_code} — ${ws.workstream_name}</option>`).join('')}
@@ -830,13 +849,17 @@ async function legacyEditTask(task) {
 
 async function editTask(task) {
   if (!task) return;
-  const [people, workstreams] = await Promise.all([api('/project-members'), api('/workstreams')]);
-  const members = people;
+  const [people, allPeople, workstreams] = await Promise.all([
+    api('/project-members'),
+    api('/people').catch(() => []),
+    api('/workstreams')
+  ]);
+  const members = people.length ? people : (allPeople || []).filter((p) => p.person_status === 'Active');
   if (!members.length) {
     showToast('Add an active project member before assigning an owner.');
     return;
   }
-  modalContent.innerHTML = `<h2 class="form-title">Edit work item structure</h2><p class="subtle">Change the work item definition, ownership, and planned due date here. Record status and progress in Work items.</p><div class="form-grid"><label class="full">Work item name<input name="taskName" required value="${task.task_name}"></label><label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(task.owner_person_id, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Workstream<select name="workstream"><option value="">None / General</option>${workstreams.map((ws) => `<option value="${ws.workstream_name}" ${selected(task.workstream, ws.workstream_name)}>${ws.workstream_code} — ${ws.workstream_name}</option>`).join('')}</select></label><label>Due date<input name="dueDate" type="date" value="${task.planned_due_date || ''}"></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save structure</button></div>`;
+  modalContent.innerHTML = `<h2 class="form-title">Edit work item structure</h2><p class="subtle">Change the work item definition, ownership, and planned due date here. Record status and progress in Work items.</p><div class="form-grid"><label class="full">Work item name<input name="taskName" required value="${task.task_name}"></label><label>Owner<select name="ownerPersonId">${renderOwnerOptions(people, allPeople, task.owner_person_id)}</select></label><label>Workstream<select name="workstream"><option value="">None / General</option>${workstreams.map((ws) => `<option value="${ws.workstream_name}" ${selected(task.workstream, ws.workstream_name)}>${ws.workstream_code} — ${ws.workstream_name}</option>`).join('')}</select></label><label>Due date<input name="dueDate" type="date" value="${task.planned_due_date || ''}"></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save structure</button></div>`;
   form.onsubmit = async (event) => {
     event.preventDefault();
     const values = new FormData(form);
@@ -1015,10 +1038,13 @@ function taskProgressModal(task) {
 }
 
 async function weeklyPlanModal(item) {
-  const [workItems, people] = await Promise.all([api('/tasks'), api('/project-members')]);
-  const members = people;
+  const [workItems, people, allPeople] = await Promise.all([
+    api('/tasks'),
+    api('/project-members'),
+    api('/people').catch(() => [])
+  ]);
   const isEdit = Boolean(item);
-  modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit weekly plan' : 'Add weekly plan'}</h2><p class="subtle">Define a commitment and its expected outcome. Linking a work item is optional.</p><div class="form-grid"><label>Week start<input name="weekStartDate" type="date" required value="${item?.week_start_date || controlWeek}"></label><label>Priority<select name="priority">${['Low', 'Medium', 'High', 'Critical'].map((value) => `<option ${selected(item?.priority || 'Medium', value)}>${value}</option>`).join('')}</select></label><label class="full">Commitment<input name="planTitle" required value="${item?.plan_title || ''}" placeholder="What must be achieved this week?"></label><label class="full">Linked work item (optional)<select name="taskId"><option value="">Project-level commitment</option>${workItems.map((task) => `<option value="${task.task_id}" ${selected(item?.task_id, task.task_id)}>${task.task_code} — ${task.task_name}</option>`).join('')}</select></label><label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(item?.owner_person_id, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Owner role<input name="ownerRole" value="${item?.owner_role || ''}" placeholder="e.g. PM, BA, QA"></label><label>Due date<input name="plannedDueDate" type="date" value="${item?.planned_due_date || ''}"></label><label>Status<select name="status">${['Planned', 'InProgress', 'Done', 'Deferred'].map((value) => `<option value="${value}" ${selected(item?.status || 'Planned', value)}>${value === 'InProgress' ? 'In progress' : value}</option>`).join('')}</select></label><label class="full">Expected outcome<textarea name="targetOutcome" placeholder="What evidence or result will show this is complete?">${item?.target_outcome || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Add to weekly plan'}</button></div>`;
+  modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit weekly plan' : 'Add weekly plan'}</h2><p class="subtle">Define a commitment and its expected outcome. Linking a work item is optional.</p><div class="form-grid"><label>Week start<input name="weekStartDate" type="date" required value="${item?.week_start_date || controlWeek}"></label><label>Priority<select name="priority">${['Low', 'Medium', 'High', 'Critical'].map((value) => `<option ${selected(item?.priority || 'Medium', value)}>${value}</option>`).join('')}</select></label><label class="full">Commitment<input name="planTitle" required value="${item?.plan_title || ''}" placeholder="What must be achieved this week?"></label><label class="full">Linked work item (optional)<select name="taskId"><option value="">Project-level commitment</option>${workItems.map((task) => `<option value="${task.task_id}" ${selected(item?.task_id, task.task_id)}>${task.task_code} — ${task.task_name}</option>`).join('')}</select></label><label>Owner<select name="ownerPersonId">${renderOwnerOptions(people, allPeople, item?.owner_person_id)}</select></label><label>Owner role<input name="ownerRole" value="${item?.owner_role || ''}" placeholder="e.g. PM, BA, QA"></label><label>Due date<input name="plannedDueDate" type="date" value="${item?.planned_due_date || ''}"></label><label>Status<select name="status">${['Planned', 'InProgress', 'Done', 'Deferred'].map((value) => `<option value="${value}" ${selected(item?.status || 'Planned', value)}>${value === 'InProgress' ? 'In progress' : value}</option>`).join('')}</select></label><label class="full">Expected outcome<textarea name="targetOutcome" placeholder="What evidence or result will show this is complete?">${item?.target_outcome || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Add to weekly plan'}</button></div>`;
   form.onsubmit = async (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(form)); try { await api(isEdit ? `/weekly-plans/${item.weekly_plan_id}` : '/weekly-plans', { method: isEdit ? 'PATCH' : 'POST', body: JSON.stringify(values) }); modal.close(); showToast(isEdit ? 'Weekly plan updated.' : 'Weekly plan added.'); navigate('updates'); } catch (error) { showToast(error.message); } };
   modal.showModal();
 }
@@ -1033,11 +1059,15 @@ async function roleUpdateModal(item) {
 }
 
 async function raidModal(item) {
-  const [people, session] = await Promise.all([api('/project-members'), api('/session')]);
-  const members = people;
+  const [people, allPeople, session] = await Promise.all([
+    api('/project-members'),
+    api('/people').catch(() => []),
+    api('/session')
+  ]);
+  const members = people.length ? people : (allPeople || []).filter((p) => p.person_status === 'Active');
   const selectedOwnerId = item?.owner_person_id || session.personId || members[0]?.person_id;
   const isEdit = Boolean(item);
-  modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit RAID item' : 'Add RAID item'}</h2><div class="form-grid"><label>Type<select name="raidType">${['Risk', 'Assumption', 'Issue', 'Dependency'].map((value) => `<option ${selected(item?.raid_type || 'Risk', value)}>${value}</option>`).join('')}</select></label><label>Status<select name="status">${['Open', 'Monitoring', 'Mitigated', 'Closed'].map((value) => `<option ${selected(item?.status || 'Open', value)}>${value}</option>`).join('')}</select></label><label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(selectedOwnerId, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Due date<input type="date" name="dueDate" value="${item?.due_date || ''}"></label><label class="full">Title<input name="title" required value="${item?.title || ''}"></label><label>Probability<input name="probability" type="number" min="1" max="5" value="${item?.probability || 3}"></label><label>Impact<input name="impact" type="number" min="1" max="5" value="${item?.impact || 3}"></label><label class="full">Mitigation plan<textarea name="mitigationPlan">${item?.mitigation_plan || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Create item'}</button></div>`;
+  modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit RAID item' : 'Add RAID item'}</h2><div class="form-grid"><label>Type<select name="raidType">${['Risk', 'Assumption', 'Issue', 'Dependency'].map((value) => `<option ${selected(item?.raid_type || 'Risk', value)}>${value}</option>`).join('')}</select></label><label>Status<select name="status">${['Open', 'Monitoring', 'Mitigated', 'Closed'].map((value) => `<option ${selected(item?.status || 'Open', value)}>${value}</option>`).join('')}</select></label><label>Owner<select name="ownerPersonId">${renderOwnerOptions(people, allPeople, selectedOwnerId)}</select></label><label>Due date<input type="date" name="dueDate" value="${item?.due_date || ''}"></label><label class="full">Title<input name="title" required value="${item?.title || ''}"></label><label>Probability<input name="probability" type="number" min="1" max="5" value="${item?.probability || 3}"></label><label>Impact<input name="impact" type="number" min="1" max="5" value="${item?.impact || 3}"></label><label class="full">Mitigation plan<textarea name="mitigationPlan">${item?.mitigation_plan || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Create item'}</button></div>`;
   form.onsubmit = async (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(form)); values.probability = Number(values.probability); values.impact = Number(values.impact); try { await api(isEdit ? `/raid/${item.raid_item_id}` : '/raid', { method: isEdit ? 'PATCH' : 'POST', body: JSON.stringify(values) }); modal.close(); showToast(isEdit ? 'RAID item updated.' : 'RAID item created.'); navigate('raid'); } catch (error) { showToast(error.message); } };
   modal.showModal();
 }
@@ -1047,11 +1077,21 @@ async function personModal(person) {
   const roles = await api('/roles').catch(() => []);
   const defaultRoles = [
     { role_code: 'TeamMember', role_name: 'Team Member' },
+    { role_code: 'Owner', role_name: 'Owner' },
+    { role_code: 'PM', role_name: 'Project Manager' },
+    { role_code: 'BA', role_name: 'Business Analyst' },
+    { role_code: 'DEV', role_name: 'Developer' },
+    { role_code: 'QA', role_name: 'Quality Assurance' },
     { role_code: 'ProjectAdmin', role_name: 'Project Admin' },
     { role_code: 'DEVLead', role_name: 'DEV Lead' },
     { role_code: 'Reviewer', role_name: 'Reviewer' }
   ];
-  const availableRoles = roles.length ? [...roles] : defaultRoles;
+  const availableRoles = [...(roles.length ? roles : defaultRoles)];
+  for (const dr of defaultRoles) {
+    if (!availableRoles.some((r) => r.role_code === dr.role_code)) {
+      availableRoles.push(dr);
+    }
+  }
   if (person?.project_role && !availableRoles.some((r) => r.role_code === person.project_role || r.role_name === person.project_role)) {
     availableRoles.push({ role_code: person.project_role, role_name: person.project_role });
   }
@@ -1064,7 +1104,23 @@ async function existingPeopleModal() {
   const [directory, members, roles] = await Promise.all([api('/people'), api('/project-members'), api('/roles').catch(() => [])]);
   const memberIds = new Set(members.map((person) => person.person_id));
   const availablePeople = directory.filter((person) => person.person_status === 'Active' && !memberIds.has(person.person_id));
-  const availableRoles = roles.length ? roles : [{ role_code: 'TeamMember', role_name: 'Team Member' }];
+  const defaultRoles = [
+    { role_code: 'TeamMember', role_name: 'Team Member' },
+    { role_code: 'Owner', role_name: 'Owner' },
+    { role_code: 'PM', role_name: 'Project Manager' },
+    { role_code: 'BA', role_name: 'Business Analyst' },
+    { role_code: 'DEV', role_name: 'Developer' },
+    { role_code: 'QA', role_name: 'Quality Assurance' },
+    { role_code: 'ProjectAdmin', role_name: 'Project Admin' },
+    { role_code: 'DEVLead', role_name: 'DEV Lead' },
+    { role_code: 'Reviewer', role_name: 'Reviewer' }
+  ];
+  const availableRoles = [...(roles.length ? roles : defaultRoles)];
+  for (const dr of defaultRoles) {
+    if (!availableRoles.some((r) => r.role_code === dr.role_code)) {
+      availableRoles.push(dr);
+    }
+  }
   modalContent.innerHTML = `<h2 class="form-title">Add existing people to this project</h2><p class="subtle">Select one or more people. They will be available for Owner and Assignee immediately.</p>${availablePeople.length ? `<div class="form-grid"><label class="full">People<select name="personIds" multiple size="${Math.min(10, availablePeople.length)}" required>${availablePeople.map((person) => `<option value="${person.person_id}">${person.display_name} (${person.employee_code})</option>`).join('')}</select></label><label>Project role<select name="projectRole">${availableRoles.map((role) => `<option value="${role.role_code}">${role.role_name} (${role.role_code})</option>`).join('')}</select></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Add selected people</button></div>` : '<p class="empty">All active people are already members of this project.</p>'}`;
   if (availablePeople.length) form.onsubmit = async (event) => { event.preventDefault(); const values = new FormData(form); const projectRole = values.get('projectRole'); try { await Promise.all(values.getAll('personIds').map((personId) => api(`/people/${personId}`, { method: 'PATCH', body: JSON.stringify({ projectRole }) }))); modal.close(); showToast('Selected people added to this project.'); navigate('admin'); } catch (error) { showToast(error.message); } };
   modal.showModal();
@@ -1102,17 +1158,21 @@ function roleMasterModal(role) {
 }
 
 async function assignmentModal(assignment) {
-  const [people, workItems, roles] = await Promise.all([api('/project-members'), api('/tasks'), api('/roles').catch(() => [])]);
-  const members = people;
-  const standardAssignRoles = ['Owner', 'DEV', 'Reviewer', 'Contributor', 'Observer'];
+  const [people, allPeople, workItems, roles] = await Promise.all([
+    api('/project-members'),
+    api('/people').catch(() => []),
+    api('/tasks'),
+    api('/roles').catch(() => [])
+  ]);
+  const standardAssignRoles = ['Owner', 'DEV', 'Reviewer', 'Contributor', 'Observer', 'PM', 'BA', 'QA'];
   const customRoleCodes = (roles || []).map((r) => r.role_code).filter((c) => !standardAssignRoles.includes(c));
   const allAssignmentRoles = [...standardAssignRoles, ...customRoleCodes];
 
   if (assignment) {
-    modalContent.innerHTML = `<h2 class="form-title">Edit assignment</h2><p class="subtle">You can move this assignment to another work item or team member.</p><div class="form-grid"><label class="full">Work item<select name="taskId">${workItems.map((item) => `<option value="${item.task_id}" ${selected(assignment.task_id, item.task_id)}>${item.task_code} — ${item.task_name}</option>`).join('')}</select></label><label>Team member<select name="personId">${members.map((person) => `<option value="${person.person_id}" ${selected(assignment.person_id, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Assignment role<select name="assignmentRole">${allAssignmentRoles.map((value) => `<option ${selected(assignment.assignment_role, value)}>${value}</option>`).join('')}</select></label><label>RACI role<select name="raciRole"><option value="">Not specified</option>${['Responsible', 'Accountable', 'Consulted', 'Informed'].map((value) => `<option value="${value}" ${selected(assignment.raci_role, value)}>${value}</option>`).join('')}</select></label><label>Allocation (%)<input name="allocationPercent" type="number" min="0" max="100" value="${assignment.allocation_percent ?? ''}" placeholder="Optional"></label><label class="checkbox-label"><input name="isPrimary" type="checkbox" ${assignment.is_primary ? 'checked' : ''}> Primary assignment</label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save changes</button></div>`;
+    modalContent.innerHTML = `<h2 class="form-title">Edit assignment</h2><p class="subtle">You can move this assignment to another work item or team member.</p><div class="form-grid"><label class="full">Work item<select name="taskId">${workItems.map((item) => `<option value="${item.task_id}" ${selected(assignment.task_id, item.task_id)}>${item.task_code} — ${item.task_name}</option>`).join('')}</select></label><label>Team member<select name="personId">${renderOwnerOptions(people, allPeople, assignment.person_id)}</select></label><label>Assignment role<select name="assignmentRole">${allAssignmentRoles.map((value) => `<option ${selected(assignment.assignment_role, value)}>${value}</option>`).join('')}</select></label><label>RACI role<select name="raciRole"><option value="">Not specified</option>${['Responsible', 'Accountable', 'Consulted', 'Informed'].map((value) => `<option value="${value}" ${selected(assignment.raci_role, value)}>${value}</option>`).join('')}</select></label><label>Allocation (%)<input name="allocationPercent" type="number" min="0" max="100" value="${assignment.allocation_percent ?? ''}" placeholder="Optional"></label><label class="checkbox-label"><input name="isPrimary" type="checkbox" ${assignment.is_primary ? 'checked' : ''}> Primary assignment</label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save changes</button></div>`;
     form.onsubmit = async (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(form)); values.isPrimary = form.elements.isPrimary.checked; try { await api(`/assignments/${assignment.task_assignment_id}`, { method: 'PATCH', body: JSON.stringify(values) }); modal.close(); showToast('Assignment updated.'); navigate('admin'); } catch (error) { showToast(error.message); } };
   } else {
-    modalContent.innerHTML = `<h2 class="form-title">Assign work</h2><div class="form-grid"><label class="full">Work item<select name="taskId">${workItems.map((item) => `<option value="${item.task_id}">${item.task_code} — ${item.task_name}</option>`).join('')}</select></label><label>Team member<select name="personId">${members.map((person) => `<option value="${person.person_id}">${person.display_name}</option>`).join('')}</select></label><label>Assignment role<select name="assignmentRole">${allAssignmentRoles.map((value) => `<option>${value}</option>`).join('')}</select></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save assignment</button></div>`;
+    modalContent.innerHTML = `<h2 class="form-title">Assign work</h2><div class="form-grid"><label class="full">Work item<select name="taskId">${workItems.map((item) => `<option value="${item.task_id}">${item.task_code} — ${item.task_name}</option>`).join('')}</select></label><label>Team member<select name="personId">${renderOwnerOptions(people, allPeople)}</select></label><label>Assignment role<select name="assignmentRole">${allAssignmentRoles.map((value) => `<option>${value}</option>`).join('')}</select></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save assignment</button></div>`;
     form.onsubmit = async (event) => { event.preventDefault(); try { await api('/assignments', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) }); modal.close(); showToast('Task assignment saved.'); navigate('admin'); } catch (error) { showToast(error.message); } };
   }
   modal.showModal();

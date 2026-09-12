@@ -295,7 +295,7 @@ const secondProjectId = '30000000-0000-0000-0000-000000000002';
 const defaultDemoLogin = process.env.DEMO_LOGIN_NAME || 'rrms.demo.pm';
 const allowDemoIdentityOverride = process.env.ALLOW_DEMO_IDENTITY_OVERRIDE === 'true';
 const assignmentRoles = new Set(['Owner', 'DEV', 'Reviewer', 'Contributor', 'Observer']);
-const projectRoles = new Set(['PM', 'ProjectAdmin', 'DEVLead', 'TeamMember', 'Reviewer']);
+const projectRoles = new Set(['PM', 'ProjectAdmin', 'DEVLead', 'TeamMember', 'Reviewer', 'Owner']);
 const taskStatuses = new Set(['NotStarted', 'InProgress', 'OnHold', 'Blocked', 'Done', 'Cancelled']);
 const ragStatuses = new Set(['Green', 'Amber', 'Red']);
 function isValidProjectType(name) {
@@ -323,6 +323,23 @@ function activeProjectMember(personId, scopedProjectId) {
   return db.prepare(`SELECT pm.* FROM project_members pm JOIN people p ON p.person_id = pm.person_id
     WHERE pm.project_id = ? AND pm.person_id = ? AND pm.deleted_at IS NULL AND p.deleted_at IS NULL
       AND p.person_status = 'Active' LIMIT 1`).get(scopedProjectId, personId);
+}
+
+function ensureActiveProjectMember(personId, scopedProjectId, defaultRole = 'TeamMember') {
+  if (!personId || !scopedProjectId) return null;
+  const member = activeProjectMember(personId, scopedProjectId);
+  if (member) return member;
+  const person = db.prepare("SELECT * FROM people WHERE person_id = ? AND deleted_at IS NULL AND person_status = 'Active'").get(personId);
+  if (!person) return null;
+  const existing = db.prepare('SELECT * FROM project_members WHERE project_id = ? AND person_id = ?').get(scopedProjectId, personId);
+  if (existing) {
+    db.prepare('UPDATE project_members SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE project_member_id = ?').run(existing.project_member_id);
+  } else {
+    const assignedRole = isValidProjectRole(defaultRole, scopedProjectId) ? defaultRole : 'TeamMember';
+    db.prepare('INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm) VALUES (?, ?, ?, ?, 0)')
+      .run(randomUUID(), scopedProjectId, personId, assignedRole);
+  }
+  return activeProjectMember(personId, scopedProjectId);
 }
 
 function projectTask(taskId, scopedProjectId) {
@@ -1299,7 +1316,7 @@ app.get('/api/project-members', async (request) => db.prepare(`SELECT p.person_i
     pm.project_member_id, pm.project_role, pm.is_main_pm, 1 AS is_project_member
   FROM project_members pm JOIN people p ON p.person_id = pm.person_id
   WHERE pm.project_id = ? AND pm.deleted_at IS NULL AND p.deleted_at IS NULL AND p.person_status = 'Active'
-    AND (p.employee_code <> 'DEMO-RRMS-PM' OR pm.is_main_pm = 1)
+    AND (p.employee_code <> 'DEMO-RRMS-PM' OR pm.is_main_pm = 1 OR EXISTS (SELECT 1 FROM tasks t WHERE t.project_id = pm.project_id AND t.owner_person_id = p.person_id AND t.deleted_at IS NULL))
   ORDER BY p.display_name`).all(request.projectId));
 
 app.post('/api/people', async (request, reply) => {
@@ -1307,6 +1324,13 @@ app.post('/api/people', async (request, reply) => {
   if (!body.employeeCode || !body.displayName) return reply.code(422).send({ message: 'Employee code and display name are required.' });
   const assignedProjectRole = body.projectRole || 'TeamMember';
   if (!isValidProjectRole(assignedProjectRole, request.projectId)) return reply.code(422).send({ message: 'Project role is invalid.' });
+  const existingPerson = db.prepare('SELECT * FROM people WHERE employee_code = ? AND deleted_at IS NULL').get(body.employeeCode);
+  if (existingPerson) {
+    ensureActiveProjectMember(existingPerson.person_id, request.projectId, assignedProjectRole);
+    db.prepare('UPDATE project_members SET project_role = ?, updated_at = CURRENT_TIMESTAMP WHERE project_id = ? AND person_id = ?')
+      .run(assignedProjectRole, request.projectId, existingPerson.person_id);
+    return reply.code(201).send({ personId: existingPerson.person_id });
+  }
   const id = randomUUID();
   try {
     db.transaction(() => {
@@ -1351,11 +1375,17 @@ app.patch('/api/people/:personId', async (request, reply) => {
         // project. Selecting a project role for one of them must create the
         // missing membership; otherwise the person can look like a team member
         // in the UI but cannot be selected as an owner or assignee.
-        const membershipId = randomUUID();
-        db.prepare(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm)
-          VALUES (?, ?, ?, ?, 0)`).run(membershipId, request.projectId, before.person_id, body.projectRole);
-        audit('project_member.create', 'ProjectMember', membershipId, null,
-          { personId: before.person_id, projectId: request.projectId, projectRole: body.projectRole }, request.actor.person_id);
+        const existingMembership = db.prepare('SELECT * FROM project_members WHERE project_id = ? AND person_id = ?').get(request.projectId, before.person_id);
+        if (existingMembership) {
+          db.prepare('UPDATE project_members SET project_role = ?, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE project_member_id = ?')
+            .run(body.projectRole, existingMembership.project_member_id);
+        } else {
+          const membershipId = randomUUID();
+          db.prepare(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm)
+            VALUES (?, ?, ?, ?, 0)`).run(membershipId, request.projectId, before.person_id, body.projectRole);
+          audit('project_member.create', 'ProjectMember', membershipId, null,
+            { personId: before.person_id, projectId: request.projectId, projectRole: body.projectRole }, request.actor.person_id);
+        }
       }
       audit('people.update', 'People', before.person_id, before, after, request.actor.person_id);
     })();
@@ -1496,7 +1526,11 @@ app.post('/api/assignments', async (request, reply) => {
   if (!task) return reply.code(422).send({ message: 'Task not found in the selected project.' });
   const person = db.prepare('SELECT person_id FROM people WHERE person_id = ? AND deleted_at IS NULL').get(body.personId);
   if (!person) return reply.code(422).send({ message: 'Unknown person.' });
-  if (!activeProjectMember(body.personId, request.projectId)) return reply.code(422).send({ message: 'Person is not an active project member.' });
+  let member = activeProjectMember(body.personId, request.projectId);
+  if (!member && body.assignmentRole === 'Owner') {
+    member = ensureActiveProjectMember(body.personId, request.projectId, 'TeamMember');
+  }
+  if (!member) return reply.code(422).send({ message: 'Person is not an active project member.' });
   const id = randomUUID();
   let resultId = id;
   try {
@@ -1543,7 +1577,11 @@ app.patch('/api/assignments/:assignmentId', async (request, reply) => {
   if (!isValidAssignmentRole(after.assignment_role, request.projectId)) return reply.code(422).send({ message: 'Assignment role is invalid.' });
   const targetTask = projectTask(after.task_id, request.projectId);
   if (!targetTask) return reply.code(422).send({ message: 'Work item was not found in the selected project.' });
-  if (!activeProjectMember(after.person_id, request.projectId)) return reply.code(422).send({ message: 'Person must be an active project member.' });
+  let member = activeProjectMember(after.person_id, request.projectId);
+  if (!member && after.assignment_role === 'Owner') {
+    member = ensureActiveProjectMember(after.person_id, request.projectId, 'TeamMember');
+  }
+  if (!member) return reply.code(422).send({ message: 'Person must be an active project member.' });
   if (after.raci_role && !['Responsible', 'Accountable', 'Consulted', 'Informed'].includes(after.raci_role)) return reply.code(422).send({ message: 'RACI role is invalid.' });
   if (after.allocation_percent !== null && after.allocation_percent !== '' && (!Number.isFinite(Number(after.allocation_percent)) || Number(after.allocation_percent) < 0 || Number(after.allocation_percent) > 100)) return reply.code(422).send({ message: 'Allocation must be between 0 and 100.' });
   if (![0, 1, '0', '1', false, true, undefined].includes(after.is_primary)) return reply.code(422).send({ message: 'Primary flag is invalid.' });
@@ -1587,10 +1625,14 @@ app.post('/api/tasks', async (request, reply) => {
   if (!['MainTask', 'Task', 'Subtask'].includes(body.taskType)) return reply.code(422).send({ message: 'Task type is invalid.' });
   const id = randomUUID();
   const taskCode = nextAvailableTaskCode(request.projectId, String(body.taskCode).trim());
-  const owner = body.ownerPersonId || request.actor.person_id;
+  const owner = body.ownerPersonId || body.owner_person_id || request.actor.person_id;
   const wbs = db.prepare('SELECT * FROM wbs_items WHERE wbs_item_id = ? AND project_id = ? AND deleted_at IS NULL').get(body.wbsItemId, request.projectId);
   if (!wbs) return reply.code(422).send({ message: 'Activity not found in the selected project.' });
-  if (!activeProjectMember(owner, request.projectId)) return reply.code(422).send({ message: 'Owner is not an active project member.' });
+  let member = activeProjectMember(owner, request.projectId);
+  if (!member) {
+    member = ensureActiveProjectMember(owner, request.projectId);
+  }
+  if (!member) return reply.code(422).send({ message: 'Owner is not an active project member.' });
   const parent = body.parentTaskId ? projectTask(body.parentTaskId, request.projectId) : null;
   if (body.taskType === 'MainTask' && body.parentTaskId) return reply.code(422).send({ message: 'A Main Task cannot have a parent task.' });
   if (body.taskType !== 'MainTask' && !parent) return reply.code(422).send({ message: `${body.taskType} requires a valid parent task.` });
@@ -1630,8 +1672,15 @@ app.patch('/api/tasks/:taskId', async (request, reply) => {
   // of attempting to write an invalid foreign key.
   const ownerSupplied = Object.hasOwn(body, 'owner_person_id') || Object.hasOwn(body, 'ownerPersonId');
   const owner = Object.hasOwn(body, 'owner_person_id') ? body.owner_person_id : body.ownerPersonId;
-  if (ownerSupplied && (typeof owner !== 'string' || !owner.trim() || !activeProjectMember(owner, request.projectId))) {
-    return reply.code(422).send({ message: 'Owner is not an active project member.' });
+  if (ownerSupplied && (typeof owner !== 'string' || !owner.trim())) {
+    return reply.code(422).send({ message: 'Owner cannot be empty.' });
+  }
+  if (ownerSupplied) {
+    let member = activeProjectMember(owner.trim(), request.projectId);
+    if (!member) {
+      member = ensureActiveProjectMember(owner.trim(), request.projectId);
+    }
+    if (!member) return reply.code(422).send({ message: 'Owner is not an active project member.' });
   }
 
   const fields = ['task_name', 'status', 'rag_status', 'progress', 'planned_due_date', 'workstream', 'owner_person_id'];
@@ -1783,7 +1832,11 @@ app.get('/api/weekly-plans', async (request) => db.prepare(`SELECT wp.*, t.task_
 app.post('/api/weekly-plans', async (request, reply) => {
   const body = request.body || {};
   if (!body.weekStartDate || !body.planTitle || !body.ownerPersonId) return reply.code(422).send({ message: 'Week, plan title and owner are required.' });
-  if (!activeProjectMember(body.ownerPersonId, request.projectId)) return reply.code(422).send({ message: 'Owner must be an active project member.' });
+  let member = activeProjectMember(body.ownerPersonId, request.projectId);
+  if (!member) {
+    member = ensureActiveProjectMember(body.ownerPersonId, request.projectId);
+  }
+  if (!member) return reply.code(422).send({ message: 'Owner must be an active project member.' });
   if (body.taskId && !projectTask(body.taskId, request.projectId)) return reply.code(422).send({ message: 'Linked work item was not found in this project.' });
   const priority = body.priority || 'Medium';
   const status = body.status || 'Planned';
@@ -1800,7 +1853,13 @@ app.patch('/api/weekly-plans/:planId', async (request, reply) => {
   const before = projectWeeklyPlan(request.params.planId, request.projectId);
   if (!before) return reply.code(404).send({ message: 'Weekly plan not found.' });
   const body = request.body || {};
-  if (body.ownerPersonId && !activeProjectMember(body.ownerPersonId, request.projectId)) return reply.code(422).send({ message: 'Owner must be an active project member.' });
+  if (body.ownerPersonId) {
+    let member = activeProjectMember(body.ownerPersonId, request.projectId);
+    if (!member) {
+      member = ensureActiveProjectMember(body.ownerPersonId, request.projectId);
+    }
+    if (!member) return reply.code(422).send({ message: 'Owner must be an active project member.' });
+  }
   if (body.taskId && !projectTask(body.taskId, request.projectId)) return reply.code(422).send({ message: 'Linked work item was not found in this project.' });
   if (body.priority && !['Low', 'Medium', 'High', 'Critical'].includes(body.priority)) return reply.code(422).send({ message: 'Priority is invalid.' });
   if (body.status && !['Planned', 'InProgress', 'Done', 'Deferred'].includes(body.status)) return reply.code(422).send({ message: 'Status is invalid.' });
@@ -1833,7 +1892,11 @@ app.get('/api/role-updates', async (request) => db.prepare(`SELECT ru.*, p.displ
 app.post('/api/role-updates', async (request, reply) => {
   const body = request.body || {};
   if (!body.weekStartDate || !body.personId || !body.roleName) return reply.code(422).send({ message: 'Week, person and role are required.' });
-  if (!activeProjectMember(body.personId, request.projectId)) return reply.code(422).send({ message: 'Person must be an active project member.' });
+  let member = activeProjectMember(body.personId, request.projectId);
+  if (!member) {
+    member = ensureActiveProjectMember(body.personId, request.projectId, isValidProjectRole(body.roleName, request.projectId) ? body.roleName : 'TeamMember');
+  }
+  if (!member) return reply.code(422).send({ message: 'Person must be an active project member.' });
   if (![body.accomplished, body.nextActions, body.blocker, body.supportNeeded].some((value) => String(value || '').trim())) return reply.code(422).send({ message: 'Add at least one update detail.' });
   const id = randomUUID();
   try {
@@ -1849,7 +1912,13 @@ app.patch('/api/role-updates/:updateId', async (request, reply) => {
   const before = projectRoleUpdate(request.params.updateId, request.projectId);
   if (!before) return reply.code(404).send({ message: 'Role update not found.' });
   const body = request.body || {};
-  if (body.personId && !activeProjectMember(body.personId, request.projectId)) return reply.code(422).send({ message: 'Person must be an active project member.' });
+  if (body.personId) {
+    let member = activeProjectMember(body.personId, request.projectId);
+    if (!member) {
+      member = ensureActiveProjectMember(body.personId, request.projectId);
+    }
+    if (!member) return reply.code(422).send({ message: 'Person must be an active project member.' });
+  }
   const fields = { weekStartDate: 'week_start_date', personId: 'person_id', roleName: 'role_name', accomplished: 'accomplished', nextActions: 'next_actions', blocker: 'blocker', supportNeeded: 'support_needed' };
   const changes = Object.entries(fields).filter(([input]) => body[input] !== undefined);
   if (!changes.length) return reply.code(422).send({ message: 'No supported values supplied.' });
@@ -2005,7 +2074,11 @@ app.post('/api/raid', async (request, reply) => {
   const body = request.body || {};
   if (!body.title || !body.raidType) return reply.code(422).send({ message: 'RAID type and title are required.' });
   const owner = body.ownerPersonId || request.actor.person_id;
-  if (!activeProjectMember(owner, request.projectId)) return reply.code(422).send({ message: 'Owner must be an active project member.' });
+  let member = activeProjectMember(owner, request.projectId);
+  if (!member) {
+    member = ensureActiveProjectMember(owner, request.projectId);
+  }
+  if (!member) return reply.code(422).send({ message: 'Owner must be an active project member.' });
   const id = randomUUID();
   const code = `RAID-${body.raidType.slice(0, 1).toUpperCase()}-${String(db.prepare('SELECT COUNT(*) AS count FROM raid_items WHERE project_id = ?').get(request.projectId).count + 1).padStart(3, '0')}`;
   const probability = body.raidType === 'Risk' ? Number(body.probability || 3) : null;
@@ -2032,7 +2105,13 @@ app.patch('/api/raid/:raidItemId', async (request, reply) => {
   if (!changes.length) return reply.code(422).send({ message: 'No supported values supplied.' });
   const after = { ...before, ...Object.fromEntries(changes.map(([input, field]) => [field, body[input]])) };
   if (!['Risk', 'Assumption', 'Issue', 'Dependency'].includes(after.raid_type) || !after.title) return reply.code(422).send({ message: 'RAID type and title are required.' });
-  if (!activeProjectMember(after.owner_person_id, request.projectId)) return reply.code(422).send({ message: 'Owner must be an active project member.' });
+  if (after.owner_person_id) {
+    let member = activeProjectMember(after.owner_person_id, request.projectId);
+    if (!member) {
+      member = ensureActiveProjectMember(after.owner_person_id, request.projectId);
+    }
+    if (!member) return reply.code(422).send({ message: 'Owner must be an active project member.' });
+  }
   if (!['Open', 'Monitoring', 'Mitigated', 'Closed'].includes(after.status)) return reply.code(422).send({ message: 'RAID status is invalid.' });
   if (after.raid_type === 'Risk' && (![after.probability, after.impact].every((value) => Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 5))) {
     return reply.code(422).send({ message: 'Risk probability and impact must be between 1 and 5.' });

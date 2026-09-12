@@ -860,3 +860,29 @@ test('enforces API_SECRET_KEY guard when configured', async () => {
     delete process.env.API_SECRET_KEY;
   }
 });
+
+test('allows setting an existing organization directory person as task Owner and ensures project membership', async () => {
+  const newPersonRes = await fetch(`${baseUrl}/api/people`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ employeeCode: 'AUTO-OWNER-99', displayName: 'Auto Owner Test' })
+  });
+  assert.equal(newPersonRes.status, 201);
+  const { personId } = await newPersonRes.json();
+
+  const tasks = await fetch(`${baseUrl}/api/tasks`).then((res) => res.json());
+  const task = tasks[0];
+
+  const patchRes = await fetch(`${baseUrl}/api/tasks/${task.task_id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_person_id: personId })
+  });
+  assert.equal(patchRes.status, 200);
+  const updated = await patchRes.json();
+  assert.equal(updated.owner_person_id, personId);
+
+  const members = await fetch(`${baseUrl}/api/project-members`).then((res) => res.json());
+  assert.ok(members.some((m) => m.person_id === personId));
+});
+

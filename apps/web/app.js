@@ -394,6 +394,8 @@ function expandableNode({ key, depth, type, code, name, status, phaseId, wbsId, 
   const typeUpper = String(type).toUpperCase();
   const typeClass = type === 'MainTask' || typeUpper === 'MAINTASK' ? 'main-task' : type === 'Task' || typeUpper === 'TASK' ? 'task-level' : type === 'Subtask' || typeUpper === 'SUBTASK' ? 'subtask-level' : typeUpper === 'ACTIVITY' || typeUpper === 'WBS' ? 'wbs-pill' : typeUpper === 'PHASE' ? 'phase-pill' : 'stream-pill';
   const displayLabel = typeUpper === 'MAINTASK' || type === 'MainTask' ? 'MAIN TASK' : typeUpper === 'ACTIVITY' ? 'WBS' : type;
+  const ownerBadge = taskItem?.owner_name ? `<span class="badge gray" style="font-size:11px;font-weight:600;padding:1px 6px">👤 ${taskItem.owner_name}</span>` : '';
+  const dueBadge = taskItem?.planned_due_date ? `<span class="subtle" style="font-size:11px">📅 ${taskItem.planned_due_date}</span>` : '';
 
   let actionBtns = '';
   if (typeUpper === 'PHASE' && phaseId) {
@@ -408,7 +410,7 @@ function expandableNode({ key, depth, type, code, name, status, phaseId, wbsId, 
     actionBtns = `<button class="secondary compact-btn" data-edit-task="${taskId}">Edit</button><button class="danger compact-btn" data-delete-task="${taskId}">Delete</button>`;
   }
 
-  return `<div class="tree-node" style="--tree-depth:${depth}"><div class="tree-row"><span class="tree-rail"></span>${toggle}<div class="tree-node-copy"><div class="task-code-line"><span class="type-pill ${typeClass}">${displayLabel}</span>${code ? `<span class="code inline-code">${code}</span>` : ''}</div><strong>${name}</strong></div>${status ? badge(status) : ''}<div class="tree-actions">${actionBtns}</div></div>${childMarkup}</div>`;
+  return `<div class="tree-node" style="--tree-depth:${depth}"><div class="tree-row"><span class="tree-rail"></span>${toggle}<div class="tree-node-copy"><div class="task-code-line"><span class="type-pill ${typeClass}">${displayLabel}</span>${code ? `<span class="code inline-code">${code}</span>` : ''}${ownerBadge}${dueBadge}</div><strong>${name}</strong></div>${status ? badge(status) : ''}<div class="tree-actions">${actionBtns}</div></div>${childMarkup}</div>`;
 }
 
 function expandableHierarchy(activities, rows, phases = []) {
@@ -821,10 +823,32 @@ async function legacyEditTask(task) {
 }
 
 async function editTask(task) {
+  if (!task) return;
   const [people, workstreams] = await Promise.all([api('/people'), api('/workstreams')]);
   const members = people.filter((person) => person.is_project_member);
   modalContent.innerHTML = `<h2 class="form-title">Edit work item structure</h2><p class="subtle">Change the work item definition, ownership, and planned due date here. Record status and progress in Work items.</p><div class="form-grid"><label class="full">Work item name<input name="taskName" required value="${task.task_name}"></label><label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(task.owner_person_id, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Workstream<select name="workstream"><option value="">None / General</option>${workstreams.map((ws) => `<option value="${ws.workstream_name}" ${selected(task.workstream, ws.workstream_name)}>${ws.workstream_code} — ${ws.workstream_name}</option>`).join('')}</select></label><label>Due date<input name="dueDate" type="date" value="${task.planned_due_date || ''}"></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save structure</button></div>`;
-  form.onsubmit = async (event) => { event.preventDefault(); const values = new FormData(form); try { await api(`/tasks/${task.task_id}`, { method: 'PATCH', body: JSON.stringify({ task_name: values.get('taskName'), owner_person_id: values.get('ownerPersonId'), workstream: values.get('workstream')?.trim() || null, planned_due_date: values.get('dueDate') || null }) }); modal.close(); tasks = []; showToast('Work item structure saved.'); navigate('structure'); } catch (error) { showToast(error.message); } };
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const values = new FormData(form);
+    try {
+      await api(`/tasks/${task.task_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          task_name: values.get('taskName'),
+          owner_person_id: values.get('ownerPersonId'),
+          workstream: values.get('workstream')?.trim() || null,
+          planned_due_date: values.get('dueDate') || null
+        })
+      });
+      modal.close();
+      tasks = [];
+      showToast('Work item structure saved.');
+      const activePage = document.querySelector('.nav.active')?.dataset.page || 'structure';
+      navigate(activePage);
+    } catch (error) {
+      showToast(error.message);
+    }
+  };
   modal.showModal();
 }
 
@@ -995,9 +1019,12 @@ async function roleUpdateModal(item) {
   modal.showModal();
 }
 
-function raidModal(item) {
+async function raidModal(item) {
+  const [people, session] = await Promise.all([api('/people'), api('/session')]);
+  const members = people.filter((person) => person.is_project_member);
+  const selectedOwnerId = item?.owner_person_id || session.personId || members[0]?.person_id;
   const isEdit = Boolean(item);
-  modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit RAID item' : 'Add RAID item'}</h2><div class="form-grid"><label>Type<select name="raidType">${['Risk', 'Assumption', 'Issue', 'Dependency'].map((value) => `<option ${selected(item?.raid_type || 'Risk', value)}>${value}</option>`).join('')}</select></label><label>Status<select name="status">${['Open', 'Monitoring', 'Mitigated', 'Closed'].map((value) => `<option ${selected(item?.status || 'Open', value)}>${value}</option>`).join('')}</select></label><label>Due date<input type="date" name="dueDate" value="${item?.due_date || ''}"></label><label class="full">Title<input name="title" required value="${item?.title || ''}"></label><label>Probability<input name="probability" type="number" min="1" max="5" value="${item?.probability || 3}"></label><label>Impact<input name="impact" type="number" min="1" max="5" value="${item?.impact || 3}"></label><label class="full">Mitigation plan<textarea name="mitigationPlan">${item?.mitigation_plan || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Create item'}</button></div>`;
+  modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit RAID item' : 'Add RAID item'}</h2><div class="form-grid"><label>Type<select name="raidType">${['Risk', 'Assumption', 'Issue', 'Dependency'].map((value) => `<option ${selected(item?.raid_type || 'Risk', value)}>${value}</option>`).join('')}</select></label><label>Status<select name="status">${['Open', 'Monitoring', 'Mitigated', 'Closed'].map((value) => `<option ${selected(item?.status || 'Open', value)}>${value}</option>`).join('')}</select></label><label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(selectedOwnerId, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Due date<input type="date" name="dueDate" value="${item?.due_date || ''}"></label><label class="full">Title<input name="title" required value="${item?.title || ''}"></label><label>Probability<input name="probability" type="number" min="1" max="5" value="${item?.probability || 3}"></label><label>Impact<input name="impact" type="number" min="1" max="5" value="${item?.impact || 3}"></label><label class="full">Mitigation plan<textarea name="mitigationPlan">${item?.mitigation_plan || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Create item'}</button></div>`;
   form.onsubmit = async (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(form)); values.probability = Number(values.probability); values.impact = Number(values.impact); try { await api(isEdit ? `/raid/${item.raid_item_id}` : '/raid', { method: isEdit ? 'PATCH' : 'POST', body: JSON.stringify(values) }); modal.close(); showToast(isEdit ? 'RAID item updated.' : 'RAID item created.'); navigate('raid'); } catch (error) { showToast(error.message); } };
   modal.showModal();
 }
@@ -1468,9 +1495,24 @@ document.addEventListener('click', async (event) => {
   const edit = ['task', 'activity', 'update', 'plan', 'role', 'raid', 'person', 'assignment'].find((type) => target.dataset[`edit${type[0].toUpperCase()}${type.slice(1)}`] !== undefined);
   if (edit) {
     const id = target.dataset[`edit${edit[0].toUpperCase()}${edit.slice(1)}`];
-    const collections = { task: tasks, activity: null, update: weeklyItems, plan: weeklyPlans, role: roleUpdates, raid: raidItems, person: peopleItems, assignment: assignmentItems };
     if (edit === 'activity') return api('/wbs').then((items) => activityModal(items.find((item) => item.wbs_item_id === id)));
-    return ({ task: editTask, update: weeklyModal, plan: weeklyPlanModal, role: roleUpdateModal, raid: raidModal, person: personModal, assignment: assignmentModal })[edit](collections[edit].find((item) => Object.values(item).includes(id)));
+    const collections = { task: tasks, update: weeklyItems, plan: weeklyPlans, role: roleUpdates, raid: raidItems, person: peopleItems, assignment: assignmentItems };
+    const idKey = {
+      task: 'task_id',
+      update: 'weekly_update_id',
+      plan: 'weekly_plan_id',
+      role: 'role_update_id',
+      raid: 'raid_item_id',
+      person: 'person_id',
+      assignment: 'task_assignment_id'
+    }[edit];
+    let targetItem = (collections[edit] || []).find((item) => item[idKey] === id);
+    if (!targetItem && edit === 'task') {
+      const freshTasks = await api('/tasks');
+      tasks = freshTasks;
+      targetItem = freshTasks.find((item) => item.task_id === id);
+    }
+    return ({ task: editTask, update: weeklyModal, plan: weeklyPlanModal, role: roleUpdateModal, raid: raidModal, person: personModal, assignment: assignmentModal })[edit](targetItem);
   }
   const type = ['task', 'activity', 'update', 'plan', 'role', 'raid', 'person', 'assignment'].find((item) => target.dataset[`delete${item[0].toUpperCase()}${item.slice(1)}`] !== undefined);
   if (type) deleteItem(type, target.dataset[`delete${type[0].toUpperCase()}${type.slice(1)}`]);

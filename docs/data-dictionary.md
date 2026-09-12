@@ -123,7 +123,7 @@ This is a logical data dictionary only. No physical database schema is created i
 | `task_assignee_id` | UUID | Yes | Unique | Assignment |
 | `task_id` | UUID | Yes | Must exist in Task | Assignment |
 | `person_id` | UUID | Yes | Must exist in People and Project Member | Assignment |
-| `assignment_role` | Enum | Yes | Owner, BA, DEV, QA, Reviewer, Contributor, Observer | Assignment |
+| `assignment_role` | String | Yes | Standard assignment role or an active project-defined role | Assignment |
 | `allocation_percent` | Decimal | No | 0-100 | Assignment |
 | `is_primary` | Boolean | Yes | At most one primary per task and role where applicable | Assignment |
 

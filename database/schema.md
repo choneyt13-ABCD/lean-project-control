@@ -74,7 +74,7 @@ erDiagram
 | `project_members` | `project_member_id` | `project_id`, `person_id` | Project membership and project role; one active main PM per project. |
 | `wbs_items` | `wbs_item_id` | `project_id`, optional `parent_wbs_item_id` | WBS hierarchy. |
 | `tasks` | `task_id` | `project_id`, `wbs_item_id`, optional `parent_task_id`, `owner_person_id` | Main Task, Task, and Subtask hierarchy. |
-| `task_assignments` | `task_assignment_id` | `task_id`, `person_id` | Multi-assignee with assignment role and RACI responsibility. |
+| `task_assignments` | `task_assignment_id` | `task_id`, `person_id` | Multi-assignee with standard or project-defined assignment role and RACI responsibility. |
 | `task_dependencies` | `task_dependency_id` | `predecessor_task_id`, `successor_task_id` | Sequencing separate from parent-child hierarchy. |
 | `weekly_updates` | `weekly_update_id` | `task_id`, submitter/reviewer person IDs | Captures RAG and review state. |
 | `evidence` | `evidence_id` | `uploaded_by_person_id` | Metadata only; binary storage is outside MVP. |

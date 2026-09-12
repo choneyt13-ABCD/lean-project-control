@@ -204,7 +204,7 @@ CREATE TABLE task_assignments (
     task_assignment_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id uuid NOT NULL REFERENCES tasks(task_id),
     person_id uuid NOT NULL REFERENCES people(person_id),
-    assignment_role varchar(20) NOT NULL CHECK (assignment_role IN ('Owner', 'BA', 'DEV', 'QA', 'Reviewer', 'Contributor', 'Observer')),
+    assignment_role varchar(100) NOT NULL,
     raci_role varchar(20) CHECK (raci_role IN ('Responsible', 'Accountable', 'Consulted', 'Informed')),
     allocation_percent numeric(5,2) CHECK (allocation_percent IS NULL OR allocation_percent BETWEEN 0 AND 100),
     is_primary boolean NOT NULL DEFAULT false,

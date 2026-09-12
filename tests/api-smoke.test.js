@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import Database from 'better-sqlite3';
+import XLSX from 'xlsx';
 
 const root = path.resolve(import.meta.dirname, '..');
 const nonMemberId = '90000000-0000-0000-0000-000000000001';
@@ -176,6 +177,38 @@ test('adds a new person as an RRMS member before assignment', async () => {
   assert.equal(assignmentResponse.status, 201);
 });
 
+test('keeps the task owner in sync when an Owner assignment is created', async () => {
+  const people = await fetch(`${baseUrl}/api/people`).then((response) => response.json());
+  const newOwner = people.find((person) => person.employee_code === 'DEMO-RRMS-BA');
+  const tasks = await fetch(`${baseUrl}/api/tasks`).then((response) => response.json());
+  const task = tasks.find((item) => item.owner_person_id !== newOwner.person_id);
+  assert.ok(task);
+
+  const response = await fetch(`${baseUrl}/api/assignments`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ taskId: task.task_id, personId: newOwner.person_id, assignmentRole: 'Owner' })
+  });
+  assert.equal(response.status, 201);
+  const { taskAssignmentId } = await response.json();
+
+  const [refreshedTasks, assignments] = await Promise.all([
+    fetch(`${baseUrl}/api/tasks`).then((result) => result.json()),
+    fetch(`${baseUrl}/api/assignments`).then((result) => result.json())
+  ]);
+  const refreshedTask = refreshedTasks.find((item) => item.task_id === task.task_id);
+  const activeOwners = assignments.filter((item) => item.task_id === task.task_id && item.assignment_role === 'Owner');
+  assert.equal(refreshedTask.owner_person_id, newOwner.person_id);
+  assert.equal(refreshedTask.owner_name, newOwner.display_name);
+  assert.equal(activeOwners.length, 1);
+  assert.equal(activeOwners[0].person_id, newOwner.person_id);
+  assert.equal(activeOwners[0].is_primary, 1);
+
+  const deleteResponse = await fetch(`${baseUrl}/api/assignments/${taskAssignmentId}`, { method: 'DELETE' });
+  assert.equal(deleteResponse.status, 422);
+  assert.deepEqual(await deleteResponse.json(), { message: 'Assign a new Owner before deleting the current Owner assignment.' });
+});
+
 test('creates a weekly update and its audit event', async () => {
   const tasks = await fetch(`${baseUrl}/api/tasks`).then((response) => response.json());
   const response = await fetch(`${baseUrl}/api/weekly-updates`, {
@@ -309,9 +342,10 @@ test('edits and soft-deletes mock records', async () => {
 
   const raidResponse = await fetch(`${baseUrl}/api/raid`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ raidType: 'Risk', title: 'Original RAID title', probability: 2, impact: 2 })
+    body: JSON.stringify({ raidType: 'Risk', title: 'Original RAID title', ownerPersonId: personId, probability: 2, impact: 2 })
   });
   const { raidItemId } = await raidResponse.json();
+  assert.equal((await fetch(`${baseUrl}/api/raid`).then((response) => response.json())).find((item) => item.raid_item_id === raidItemId).owner_person_id, personId);
   const raidUpdate = await fetch(`${baseUrl}/api/raid/${raidItemId}`, {
     method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'Edited RAID title', status: 'Monitoring' })
   });
@@ -505,11 +539,23 @@ test('manages team roles master data and assigns custom roles to people', async 
   assert.ok(createdPerson);
   assert.equal(createdPerson.project_role, 'TECH_LEAD');
 
+  const task = (await fetch(`${baseUrl}/api/tasks`).then((response) => response.json()))[0];
+  const customAssignmentRes = await fetch(`${baseUrl}/api/assignments`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ taskId: task.task_id, personId, assignmentRole: 'TECH_LEAD' })
+  });
+  assert.equal(customAssignmentRes.status, 201);
+  const { taskAssignmentId } = await customAssignmentRes.json();
+  assert.equal((await fetch(`${baseUrl}/api/assignments`).then((response) => response.json())).find((item) => item.task_assignment_id === taskAssignmentId).assignment_role, 'TECH_LEAD');
+
   // Deleting role while member is assigned should fail
   const deleteFailRes = await fetch(`${baseUrl}/api/roles/${roleId}`, {
     method: 'DELETE'
   });
   assert.equal(deleteFailRes.status, 422);
+
+  assert.equal((await fetch(`${baseUrl}/api/assignments/${taskAssignmentId}`, { method: 'DELETE' })).status, 204);
 
   // Delete person first, then delete role
   const deletePersonRes = await fetch(`${baseUrl}/api/people/${personId}`, {
@@ -566,6 +612,9 @@ test('updates work item progress, auto-syncs status/progress, rolls up to parent
 });
 
 test('manages end-to-end hierarchy from Phase -> WBS -> MainTask -> Task -> Subtask', async () => {
+  const people = await fetch(`${baseUrl}/api/people`).then((response) => response.json());
+  const pm = people.find((person) => person.employee_code === 'DEMO-RRMS-PM');
+  const ba = people.find((person) => person.employee_code === 'DEMO-RRMS-BA');
   const phaseRes = await fetch(`${baseUrl}/api/phases`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -589,7 +638,8 @@ test('manages end-to-end hierarchy from Phase -> WBS -> MainTask -> Task -> Subt
       wbsItemId,
       taskCode: 'E2E-MT-001',
       taskType: 'MainTask',
-      taskName: 'E2E Main Task'
+      taskName: 'E2E Main Task',
+      ownerPersonId: ba.person_id
     })
   });
   assert.equal(mtRes.status, 201);
@@ -603,7 +653,8 @@ test('manages end-to-end hierarchy from Phase -> WBS -> MainTask -> Task -> Subt
       parentTaskId: mtId,
       taskCode: 'E2E-T-001',
       taskType: 'Task',
-      taskName: 'E2E Task'
+      taskName: 'E2E Task',
+      ownerPersonId: pm.person_id
     })
   });
   assert.equal(tRes.status, 201);
@@ -617,17 +668,96 @@ test('manages end-to-end hierarchy from Phase -> WBS -> MainTask -> Task -> Subt
       parentTaskId: tId,
       taskCode: 'E2E-ST-001',
       taskType: 'Subtask',
-      taskName: 'E2E Subtask'
+      taskName: 'E2E Subtask',
+      ownerPersonId: ba.person_id
     })
   });
   assert.equal(stRes.status, 201);
   const { taskId: stId } = await stRes.json();
+
+  const [createdTasks, createdAssignments] = await Promise.all([
+    fetch(`${baseUrl}/api/tasks`).then((response) => response.json()),
+    fetch(`${baseUrl}/api/assignments`).then((response) => response.json())
+  ]);
+  const expectedOwners = new Map([[mtId, ba], [tId, pm], [stId, ba]]);
+  for (const [taskId, expectedOwner] of expectedOwners) {
+    const createdTask = createdTasks.find((item) => item.task_id === taskId);
+    const owners = createdAssignments.filter((item) => item.task_id === taskId && item.assignment_role === 'Owner');
+    assert.equal(createdTask.owner_person_id, expectedOwner.person_id);
+    assert.equal(createdTask.owner_name, expectedOwner.display_name);
+    assert.equal(owners.length, 1);
+    assert.equal(owners[0].person_id, expectedOwner.person_id);
+    assert.equal(owners[0].is_primary, 1);
+  }
+
+  // Change owner of MainTask from BA to PM
+  const changeOwnerRes = await fetch(`${baseUrl}/api/tasks/${mtId}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_person_id: pm.person_id })
+  });
+  assert.equal(changeOwnerRes.status, 200);
+  const updatedMt = await changeOwnerRes.json();
+  assert.equal(updatedMt.owner_person_id, pm.person_id);
+  assert.equal(updatedMt.owner_name, pm.display_name);
+
+  // Verify child task owner was unaffected
+  const refreshedChild = (await fetch(`${baseUrl}/api/tasks`).then((r) => r.json())).find((item) => item.task_id === tId);
+  assert.equal(refreshedChild.owner_person_id, pm.person_id);
+
+  // Verify assignments: mtId now has pm as primary owner, ba is demoted
+  const refreshedAssignments = await fetch(`${baseUrl}/api/assignments`).then((r) => r.json());
+  const mtOwners = refreshedAssignments.filter((item) => item.task_id === mtId && item.assignment_role === 'Owner');
+  assert.equal(mtOwners.length, 1);
+  assert.equal(mtOwners[0].person_id, pm.person_id);
+  assert.equal(mtOwners[0].is_primary, 1);
 
   assert.equal((await fetch(`${baseUrl}/api/tasks/${stId}`, { method: 'DELETE' })).status, 204);
   assert.equal((await fetch(`${baseUrl}/api/tasks/${tId}`, { method: 'DELETE' })).status, 204);
   assert.equal((await fetch(`${baseUrl}/api/tasks/${mtId}`, { method: 'DELETE' })).status, 204);
   assert.equal((await fetch(`${baseUrl}/api/wbs/${wbsItemId}`, { method: 'DELETE' })).status, 204);
   assert.equal((await fetch(`${baseUrl}/api/phases/${phaseId}`, { method: 'DELETE' })).status, 204);
+});
+
+test('imports task owners and assignees instead of replacing them with the Main PM', async () => {
+  const people = await fetch(`${baseUrl}/api/people`).then((response) => response.json());
+  const pm = people.find((person) => person.employee_code === 'DEMO-RRMS-PM');
+  const ba = people.find((person) => person.employee_code === 'DEMO-RRMS-BA');
+  const rows = [
+    ['Level*', 'Task No.*', 'Parent No.', 'Task Title*', 'Task Owner(s)', 'Assignee Person IDs', 'Duration (days)', 'Start Date', 'Due Date', 'Status*', 'Progress %', 'Priority', 'Evidence required', 'WBS Code', 'Notes'],
+    ['Phase', 'IMP-1', '', 'Imported phase', '', '', '', '2026-09-01', '2026-09-30', 'NotStarted', 0, 'Low', 'FALSE', '', ''],
+    ['Main Task', 'IMP-1.1', 'IMP-1', 'Imported owned work', ba.person_id, pm.person_id, '', '2026-09-01', '2026-09-30', 'InProgress', 25, 'Medium', 'TRUE', 'IMP-MT-OWNER', 'Owner import check']
+  ];
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), 'Project plan');
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+  const previewResponse = await fetch(`${baseUrl}/api/imports/preview`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/octet-stream', 'x-import-filename': 'owner-import.xlsx' },
+    body: buffer
+  });
+  assert.equal(previewResponse.status, 200);
+  const preview = await previewResponse.json();
+  assert.deepEqual(preview.errors, []);
+
+  const commitResponse = await fetch(`${baseUrl}/api/imports/commit`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: preview.token, mode: 'update' })
+  });
+  assert.equal(commitResponse.status, 200);
+
+  const [tasks, assignments] = await Promise.all([
+    fetch(`${baseUrl}/api/tasks`).then((response) => response.json()),
+    fetch(`${baseUrl}/api/assignments`).then((response) => response.json())
+  ]);
+  const imported = tasks.find((item) => item.task_code === 'RRMS-IMP-MT-OWNER');
+  assert.equal(imported.owner_person_id, ba.person_id);
+  assert.equal(imported.owner_name, ba.display_name);
+  assert.equal(imported.evidence_required, 1);
+  assert.ok(assignments.some((item) => item.task_id === imported.task_id && item.person_id === ba.person_id && item.assignment_role === 'Owner'));
+  assert.ok(assignments.some((item) => item.task_id === imported.task_id && item.person_id === pm.person_id && item.assignment_role === 'Contributor'));
 });
 
 test('enforces API_SECRET_KEY guard when configured', async () => {
@@ -651,4 +781,3 @@ test('enforces API_SECRET_KEY guard when configured', async () => {
     delete process.env.API_SECRET_KEY;
   }
 });
-

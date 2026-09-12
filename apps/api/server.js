@@ -241,6 +241,27 @@ if (projectMembersSql.includes("CHECK (project_role IN")) {
     CREATE UNIQUE INDEX IF NOT EXISTS uq_project_members_active_main_pm ON project_members(project_id) WHERE is_main_pm = 1 AND deleted_at IS NULL;
   `);
 }
+const taskAssignmentsSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'task_assignments'").get()?.sql || '';
+if (taskAssignmentsSql.includes("CHECK (assignment_role IN")) {
+  db.exec(`
+    CREATE TABLE task_assignments_new (
+      task_assignment_id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL REFERENCES tasks(task_id),
+      person_id TEXT NOT NULL REFERENCES people(person_id),
+      assignment_role TEXT NOT NULL,
+      raci_role TEXT CHECK (raci_role IN ('Responsible','Accountable','Consulted','Informed')),
+      allocation_percent REAL CHECK (allocation_percent IS NULL OR allocation_percent BETWEEN 0 AND 100),
+      is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_at TEXT,
+      UNIQUE (task_id, person_id, assignment_role)
+    );
+    INSERT INTO task_assignments_new SELECT * FROM task_assignments;
+    DROP TABLE task_assignments;
+    ALTER TABLE task_assignments_new RENAME TO task_assignments;
+  `);
+}
 
 db.exec(`CREATE TABLE IF NOT EXISTS project_type_definitions (
   type_id TEXT PRIMARY KEY,
@@ -307,6 +328,23 @@ function activeProjectMember(personId, scopedProjectId) {
 
 function projectTask(taskId, scopedProjectId) {
   return db.prepare('SELECT * FROM tasks WHERE task_id = ? AND project_id = ? AND deleted_at IS NULL').get(taskId, scopedProjectId);
+}
+
+function setTaskOwner(taskId, ownerPersonId) {
+  const existing = db.prepare(`SELECT task_assignment_id FROM task_assignments
+    WHERE task_id = ? AND person_id = ? AND assignment_role = 'Owner'`).get(taskId, ownerPersonId);
+  const assignmentId = existing?.task_assignment_id || randomUUID();
+  db.prepare(`UPDATE task_assignments SET is_primary = 0, deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE task_id = ? AND assignment_role = 'Owner' AND task_assignment_id != ?`).run(taskId, assignmentId);
+  if (existing) {
+    db.prepare(`UPDATE task_assignments SET is_primary = 1, raci_role = 'Accountable', deleted_at = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE task_assignment_id = ?`).run(assignmentId);
+  } else {
+    db.prepare(`INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+      VALUES (?, ?, ?, 'Owner', 'Accountable', 1)`).run(assignmentId, taskId, ownerPersonId);
+  }
+  db.prepare('UPDATE tasks SET owner_person_id = ?, updated_at = CURRENT_TIMESTAMP WHERE task_id = ?').run(ownerPersonId, taskId);
+  return assignmentId;
 }
 
 function projectTaskNote(noteId, scopedProjectId) {
@@ -438,6 +476,19 @@ function importTemplate(buffer, filename, project) {
   const headers = raw[headerAt].map(normalizedHeader);
   const column = (...names) => names.map((name) => headers.indexOf(name)).find((index) => index >= 0) ?? -1;
   const get = (row, ...names) => { const index = column(...names); return index >= 0 ? row[index] : ''; };
+  const splitPeople = (value) => String(value || '').split(';').map((item) => item.trim()).filter(Boolean);
+  const memberRows = db.prepare(`SELECT p.person_id, p.employee_code, p.email, p.display_name
+    FROM project_members pm JOIN people p ON p.person_id = pm.person_id
+    WHERE pm.project_id = ? AND pm.deleted_at IS NULL AND p.deleted_at IS NULL
+      AND (pm.active_from IS NULL OR pm.active_from <= date('now'))
+      AND (pm.active_to IS NULL OR pm.active_to >= date('now'))`).all(project.project_id);
+  const memberByReference = new Map();
+  for (const member of memberRows) {
+    for (const reference of [member.person_id, member.employee_code, member.email, member.display_name]) {
+      if (reference) memberByReference.set(String(reference).trim().toLowerCase(), member.person_id);
+    }
+  }
+  const resolveMember = (reference) => memberByReference.get(String(reference || '').trim().toLowerCase());
   const rows = raw.slice(headerAt + 1).filter((row) => String(get(row, 'level')).trim() && String(get(row, 'task no', 'task number')).trim()).map((row, index) => ({
     row: headerAt + index + 2,
     level: String(get(row, 'level')).trim(), taskNo: String(get(row, 'task no', 'task number')).trim(),
@@ -446,7 +497,13 @@ function importTemplate(buffer, filename, project) {
     sourceCode: String(get(row, 'source wbs code', 'task code', 'work item code', 'wbs code')).trim(),
     startDate: importDate(get(row, 'start date')), dueDate: importDate(get(row, 'due date', 'target end date')),
     status: importStatus(get(row, 'status')), progress: Math.min(100, Math.max(0, Number(get(row, '% complete', 'progress', 'progress %')) || 0)),
-    rag: importPriority(get(row, 'priority')), notes: String(get(row, 'notes', 'note')).trim()
+    rag: importPriority(get(row, 'priority')), notes: String(get(row, 'notes', 'note')).trim(),
+    ownerReferences: splitPeople(get(row, 'owner person id', 'task owner s', 'task owner', 'owner')),
+    assigneeReferences: splitPeople(get(row, 'assignee person ids', 'assignee person id', 'assignees')),
+    assignmentRole: String(get(row, 'role', 'assignment role')).trim() || 'Contributor',
+    weight: Math.min(100, Math.max(0, Number(get(row, 'weight')) || 0)),
+    evidenceRequired: ['true', 'yes', '1', 'required'].includes(String(get(row, 'evidence required')).trim().toLowerCase()),
+    workstream: String(get(row, 'workstream')).trim() || null
   }));
   const errors = [];
   const allowed = new Set(['Phase', 'Main Task', 'Task', 'Subtask']);
@@ -457,6 +514,19 @@ function importTemplate(buffer, filename, project) {
     if (keys.has(item.taskNo)) errors.push(`Row ${item.row}: Task No '${item.taskNo}' is duplicated in the file.`); else keys.add(item.taskNo);
     if (item.level !== 'Phase' && !item.parentNo) errors.push(`Row ${item.row}: Parent No is required for ${item.level}.`);
     if (item.level !== 'Phase' && item.sourceCode) { if (sourceCodes.has(item.sourceCode)) errors.push(`Row ${item.row}: Task Code '${item.sourceCode}' is duplicated in the file.`); else sourceCodes.add(item.sourceCode); }
+    if (item.level !== 'Phase') {
+      if (item.ownerReferences.length > 1) errors.push(`Row ${item.row}: Supply one task Owner only.`);
+      item.ownerPersonId = item.ownerReferences.length ? resolveMember(item.ownerReferences[0]) : project.main_pm_person_id;
+      if (!item.ownerPersonId) errors.push(`Row ${item.row}: Owner '${item.ownerReferences[0]}' is not an active project member.`);
+      item.assigneePersonIds = item.assigneeReferences.map((reference) => ({ reference, personId: resolveMember(reference) }));
+      for (const assignee of item.assigneePersonIds) {
+        if (!assignee.personId) errors.push(`Row ${item.row}: Assignee '${assignee.reference}' is not an active project member.`);
+      }
+      if (!isValidAssignmentRole(item.assignmentRole, project.project_id)) errors.push(`Row ${item.row}: Assignment role '${item.assignmentRole}' is invalid.`);
+      if (item.assignmentRole === 'Owner' && item.assigneePersonIds.some((assignee) => assignee.personId && assignee.personId !== item.ownerPersonId)) {
+        errors.push(`Row ${item.row}: Owner assignments must match the task Owner.`);
+      }
+    }
   }
   const phases = rows.filter((item) => item.level === 'Phase');
   const items = rows.filter((item) => item.level !== 'Phase');
@@ -566,6 +636,30 @@ seedStandardWorkstreams(defaultProjectId);
 seedStandardWorkstreams(secondProjectId);
 seedStandardRoles(defaultProjectId);
 seedStandardRoles(secondProjectId);
+
+// Older walkthrough data could contain an Owner assignment that disagreed with
+// tasks.owner_person_id. Prefer the explicitly primary Owner assignment and
+// repair the duplicated representation once when the server starts.
+function reconcileStoredTaskOwners() {
+  const taskRows = db.prepare(`SELECT t.*, ta.person_id AS assigned_owner_person_id
+    FROM tasks t
+    JOIN task_assignments ta ON ta.task_id = t.task_id AND ta.assignment_role = 'Owner' AND ta.deleted_at IS NULL
+    WHERE t.deleted_at IS NULL
+    ORDER BY t.task_id, ta.is_primary DESC, ta.updated_at DESC, ta.created_at DESC`).all();
+  const reconciled = new Set();
+  db.transaction(() => {
+    for (const task of taskRows) {
+      if (reconciled.has(task.task_id)) continue;
+      reconciled.add(task.task_id);
+      setTaskOwner(task.task_id, task.assigned_owner_person_id);
+      if (task.owner_person_id !== task.assigned_owner_person_id) {
+        audit('task.owner_reconcile', 'Task', task.task_id, task, { ...task, owner_person_id: task.assigned_owner_person_id }, null);
+      }
+    }
+  })();
+}
+
+reconcileStoredTaskOwners();
 
 
 
@@ -701,8 +795,10 @@ app.post('/api/imports/commit', async (request, reply) => {
       phaseByNo.set(phase.taskNo, wbsRow);
     });
     const taskByNo = new Map(); let currentPhaseNo = null; let created = 0; let updated = 0;
-    const upsertTask = db.prepare(`INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, status, rag_status, weight, progress)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(project_id, task_code) DO UPDATE SET wbs_item_id = excluded.wbs_item_id, parent_task_id = excluded.parent_task_id, task_type = excluded.task_type, task_name = excluded.task_name, description = excluded.description, planned_start_date = excluded.planned_start_date, planned_due_date = excluded.planned_due_date, status = excluded.status, rag_status = excluded.rag_status, progress = excluded.progress, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`);
+    const upsertTask = db.prepare(`INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, status, rag_status, weight, progress, evidence_required, workstream)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(project_id, task_code) DO UPDATE SET wbs_item_id = excluded.wbs_item_id, parent_task_id = excluded.parent_task_id, task_type = excluded.task_type, task_name = excluded.task_name, description = excluded.description, owner_person_id = excluded.owner_person_id, planned_start_date = excluded.planned_start_date, planned_due_date = excluded.planned_due_date, status = excluded.status, rag_status = excluded.rag_status, weight = excluded.weight, progress = excluded.progress, evidence_required = excluded.evidence_required, workstream = excluded.workstream, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`);
+    const upsertAssignment = db.prepare(`INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+      VALUES (?, ?, ?, ?, ?, 0) ON CONFLICT(task_id, person_id, assignment_role) DO UPDATE SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP`);
     for (const item of preview.items) {
       const phaseNo = item.level === 'Main Task' ? item.parentNo : currentPhaseNo;
       if (item.level === 'Main Task') currentPhaseNo = item.parentNo;
@@ -712,15 +808,14 @@ app.post('/api/imports/commit', async (request, reply) => {
       const code = `${project.project_code}-${item.sourceCode || item.taskNo.replaceAll('.', '-')}`;
       const wasExisting = db.prepare('SELECT task_id FROM tasks WHERE project_id = ? AND task_code = ?').get(project.project_id, code);
       const type = item.level === 'Main Task' ? 'MainTask' : item.level === 'Task' ? 'Task' : 'Subtask';
-      upsertTask.run(randomUUID(), project.project_id, wbs.wbs_item_id, parentTaskId || null, code, type, item.title, item.notes || null, project.main_pm_person_id, item.startDate, item.dueDate, item.status, item.rag, 1, item.progress);
+      upsertTask.run(randomUUID(), project.project_id, wbs.wbs_item_id, parentTaskId || null, code, type, item.title, item.notes || null, item.ownerPersonId, item.startDate, item.dueDate, item.status, item.rag, item.weight, item.progress, item.evidenceRequired ? 1 : 0, item.workstream);
       const saved = db.prepare('SELECT * FROM tasks WHERE project_id = ? AND task_code = ?').get(project.project_id, code);
       taskByNo.set(item.taskNo, saved.task_id);
       if (wasExisting) updated += 1; else created += 1;
-      const existingOwner = db.prepare(`SELECT task_assignment_id FROM task_assignments WHERE task_id = ? AND person_id = ? AND assignment_role = 'Owner'`).get(saved.task_id, project.main_pm_person_id);
-      if (existingOwner) {
-        db.prepare(`UPDATE task_assignments SET deleted_at = NULL, is_primary = 1, raci_role = 'Accountable', updated_at = CURRENT_TIMESTAMP WHERE task_assignment_id = ?`).run(existingOwner.task_assignment_id);
-      } else {
-        db.prepare(`INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary) VALUES (?, ?, ?, 'Owner', 'Accountable', 1)`).run(randomUUID(), saved.task_id, project.main_pm_person_id);
+      setTaskOwner(saved.task_id, item.ownerPersonId);
+      for (const assignee of item.assigneePersonIds) {
+        if (!assignee.personId || (assignee.personId === item.ownerPersonId && item.assignmentRole === 'Owner')) continue;
+        upsertAssignment.run(randomUUID(), saved.task_id, assignee.personId, item.assignmentRole, item.assignmentRole === 'Owner' ? 'Accountable' : null);
       }
     }
     audit(`template_import.${mode}`, 'Project', project.project_id, null, { fileName: preview.filename, created, updated, archived }, request.actor.person_id);
@@ -842,6 +937,8 @@ app.post('/api/projects', async (request, reply) => {
   if (body.projectSize && !projectSizes.has(body.projectSize)) return reply.code(422).send({ message: 'Project size is invalid.' });
   const id = randomUUID();
   const mainPm = body.mainPmPersonId || request.actor.person_id;
+  const mainPmPerson = db.prepare("SELECT 1 FROM people WHERE person_id = ? AND person_status = 'Active' AND deleted_at IS NULL").get(mainPm);
+  if (!mainPmPerson) return reply.code(422).send({ message: 'Main PM must be an active person.' });
   try {
     db.transaction(() => {
       db.prepare(`INSERT INTO projects (project_id, project_code, project_name, portfolio_name, project_type, project_size, main_pm_person_id, project_status, rag_status, start_date, target_end_date)
@@ -885,8 +982,8 @@ app.patch('/api/projects/:projectId', async (request, reply) => {
     return reply.code(422).send({ message: 'Target end date cannot be before start date.' });
   }
   if (body.mainPmPersonId) {
-    const person = db.prepare('SELECT * FROM people WHERE person_id = ? AND deleted_at IS NULL').get(body.mainPmPersonId);
-    if (!person) return reply.code(422).send({ message: 'Main PM not found.' });
+    const person = db.prepare("SELECT * FROM people WHERE person_id = ? AND person_status = 'Active' AND deleted_at IS NULL").get(body.mainPmPersonId);
+    if (!person) return reply.code(422).send({ message: 'Main PM must be an active person.' });
   }
   try {
     db.transaction(() => {
@@ -1102,7 +1199,12 @@ app.patch('/api/roles/:roleId', async (request, reply) => {
 app.delete('/api/roles/:roleId', async (request, reply) => {
   const before = projectRole(request.params.roleId, request.projectId);
   if (!before) return reply.code(404).send({ message: 'Role not found.' });
-  const inUse = db.prepare('SELECT 1 FROM project_members WHERE project_id = ? AND (project_role = ? OR project_role = ?) AND deleted_at IS NULL').get(request.projectId, before.role_code, before.role_name);
+  const inUse = db.prepare(`SELECT 1 FROM project_members
+    WHERE project_id = ? AND (project_role = ? OR project_role = ?) AND deleted_at IS NULL
+    UNION ALL
+    SELECT 1 FROM task_assignments ta JOIN tasks t ON t.task_id = ta.task_id
+    WHERE t.project_id = ? AND (ta.assignment_role = ? OR ta.assignment_role = ?) AND ta.deleted_at IS NULL AND t.deleted_at IS NULL
+    LIMIT 1`).get(request.projectId, before.role_code, before.role_name, request.projectId, before.role_code, before.role_name);
   if (inUse) return reply.code(422).send({ message: 'Reassign team members before deleting this role.' });
   db.transaction(() => {
     db.prepare('UPDATE project_roles SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE role_id = ?').run(before.role_id);
@@ -1351,7 +1453,8 @@ app.post('/api/assignments', async (request, reply) => {
   const body = request.body || {};
   if (!body.taskId || !body.personId || !body.assignmentRole) return reply.code(422).send({ message: 'Task, person and assignment role are required.' });
   if (!isValidAssignmentRole(body.assignmentRole, request.projectId)) return reply.code(422).send({ message: 'Assignment role is invalid.' });
-  if (!projectTask(body.taskId, request.projectId)) return reply.code(422).send({ message: 'Task not found in the selected project.' });
+  const task = projectTask(body.taskId, request.projectId);
+  if (!task) return reply.code(422).send({ message: 'Task not found in the selected project.' });
   const person = db.prepare('SELECT person_id FROM people WHERE person_id = ? AND deleted_at IS NULL').get(body.personId);
   if (!person) return reply.code(422).send({ message: 'Unknown person.' });
   if (!activeProjectMember(body.personId, request.projectId)) return reply.code(422).send({ message: 'Person is not an active project member.' });
@@ -1374,6 +1477,12 @@ app.post('/api/assignments', async (request, reply) => {
           VALUES (?, ?, ?, ?, ?, ?)`).run(id, body.taskId, body.personId, body.assignmentRole, body.raciRole || null, body.isPrimary ? 1 : 0);
         audit('assignment.create', 'TaskAssignment', id, null, body, request.actor.person_id);
       }
+      if (body.assignmentRole === 'Owner') {
+        resultId = setTaskOwner(body.taskId, body.personId);
+        if (task.owner_person_id !== body.personId) {
+          audit('task.update', 'Task', task.task_id, task, { ...task, owner_person_id: body.personId }, request.actor.person_id);
+        }
+      }
     })();
   } catch (error) { return reply.code(409).send({ message: error.message || 'This assignment already exists.' }); }
   return reply.code(201).send({ taskAssignmentId: resultId });
@@ -1393,15 +1502,26 @@ app.patch('/api/assignments/:assignmentId', async (request, reply) => {
   if (!changes.length) return reply.code(422).send({ message: 'No supported values supplied.' });
   const after = { ...before, ...Object.fromEntries(changes.map(([input, field]) => [field, body[input]])) };
   if (!isValidAssignmentRole(after.assignment_role, request.projectId)) return reply.code(422).send({ message: 'Assignment role is invalid.' });
-  if (!projectTask(after.task_id, request.projectId)) return reply.code(422).send({ message: 'Work item was not found in the selected project.' });
+  const targetTask = projectTask(after.task_id, request.projectId);
+  if (!targetTask) return reply.code(422).send({ message: 'Work item was not found in the selected project.' });
   if (!activeProjectMember(after.person_id, request.projectId)) return reply.code(422).send({ message: 'Person must be an active project member.' });
   if (after.raci_role && !['Responsible', 'Accountable', 'Consulted', 'Informed'].includes(after.raci_role)) return reply.code(422).send({ message: 'RACI role is invalid.' });
   if (after.allocation_percent !== null && after.allocation_percent !== '' && (!Number.isFinite(Number(after.allocation_percent)) || Number(after.allocation_percent) < 0 || Number(after.allocation_percent) > 100)) return reply.code(422).send({ message: 'Allocation must be between 0 and 100.' });
   if (![0, 1, '0', '1', false, true, undefined].includes(after.is_primary)) return reply.code(422).send({ message: 'Primary flag is invalid.' });
+  const priorTask = projectTask(before.task_id, request.projectId);
+  const movesCurrentOwner = priorTask?.owner_person_id === before.person_id && before.assignment_role === 'Owner'
+    && (after.task_id !== before.task_id || after.assignment_role !== 'Owner');
+  if (movesCurrentOwner) return reply.code(422).send({ message: 'Assign a new Owner before moving or changing the current Owner assignment.' });
   try {
     db.transaction(() => {
       db.prepare(`UPDATE task_assignments SET ${changes.map(([, field]) => `${field} = ?`).join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE task_assignment_id = ?`)
         .run(...changes.map(([input]) => input === 'isPrimary' ? (body[input] ? 1 : 0) : (body[input] === '' ? null : body[input])), before.task_assignment_id);
+      if (after.assignment_role === 'Owner') {
+        setTaskOwner(after.task_id, after.person_id);
+        if (targetTask.owner_person_id !== after.person_id) {
+          audit('task.update', 'Task', targetTask.task_id, targetTask, { ...targetTask, owner_person_id: after.person_id }, request.actor.person_id);
+        }
+      }
       audit('assignment.update', 'TaskAssignment', before.task_assignment_id, before, after, request.actor.person_id);
     })();
   } catch (error) { return reply.code(409).send({ message: 'This assignment already exists.' }); }
@@ -1411,6 +1531,10 @@ app.patch('/api/assignments/:assignmentId', async (request, reply) => {
 app.delete('/api/assignments/:assignmentId', async (request, reply) => {
   const before = projectAssignment(request.params.assignmentId, request.projectId);
   if (!before) return reply.code(404).send({ message: 'Assignment not found.' });
+  const task = projectTask(before.task_id, request.projectId);
+  if (before.assignment_role === 'Owner' && task?.owner_person_id === before.person_id) {
+    return reply.code(422).send({ message: 'Assign a new Owner before deleting the current Owner assignment.' });
+  }
   db.transaction(() => {
     db.prepare('UPDATE task_assignments SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE task_assignment_id = ?').run(before.task_assignment_id);
     audit('assignment.delete', 'TaskAssignment', before.task_assignment_id, before, null, request.actor.person_id);
@@ -1447,8 +1571,7 @@ app.post('/api/tasks', async (request, reply) => {
       db.prepare(`INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, owner_person_id, planned_start_date, planned_due_date, status, rag_status, weight, progress, evidence_required, workstream)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(id, request.projectId, body.wbsItemId, body.parentTaskId || null, taskCode, body.taskType, body.taskName, owner, body.plannedStartDate || null, body.plannedDueDate || null, body.status || 'NotStarted', body.ragStatus || 'Green', weight, progress, body.evidenceRequired ? 1 : 0, workstream);
-      db.prepare('INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary) VALUES (?, ?, ?, ?, ?, 1)')
-        .run(randomUUID(), id, owner, 'Owner', 'Accountable');
+      setTaskOwner(id, owner);
       if (body.parentTaskId) {
         rollupTaskProgress(body.parentTaskId);
       }
@@ -1503,28 +1626,17 @@ app.patch('/api/tasks/:taskId', async (request, reply) => {
         return mappedBody[field];
       }), before.task_id);
     if (owner) {
-      // Demote any other primary Owner assignment on this task
-      db.prepare(`UPDATE task_assignments SET is_primary = 0, deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-        WHERE task_id = ? AND assignment_role = 'Owner' AND person_id != ?`).run(before.task_id, owner);
-
-      // Check if this owner already has an assignment record for this task with role 'Owner' (active or soft-deleted)
-      const existingOwnerAssign = db.prepare(`SELECT task_assignment_id FROM task_assignments
-        WHERE task_id = ? AND person_id = ? AND assignment_role = 'Owner'`).get(before.task_id, owner);
-
-      if (existingOwnerAssign) {
-        db.prepare(`UPDATE task_assignments SET deleted_at = NULL, is_primary = 1, raci_role = 'Accountable', updated_at = CURRENT_TIMESTAMP
-          WHERE task_assignment_id = ?`).run(existingOwnerAssign.task_assignment_id);
-      } else {
-        db.prepare(`INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-          VALUES (?, ?, ?, 'Owner', 'Accountable', 1)`).run(randomUUID(), before.task_id, owner);
-      }
+      setTaskOwner(before.task_id, owner);
     }
     if (before.parent_task_id) {
       rollupTaskProgress(before.parent_task_id);
     }
     audit('task.update', 'Task', before.task_id, before, after, request.actor.person_id);
   })();
-  return db.prepare('SELECT * FROM tasks WHERE task_id = ?').get(before.task_id);
+  return db.prepare(`SELECT t.*, p.display_name AS owner_name
+    FROM tasks t
+    JOIN people p ON p.person_id = t.owner_person_id
+    WHERE t.task_id = ?`).get(before.task_id);
 });
 
 app.get('/api/task-notes', async (request, reply) => {
@@ -1848,6 +1960,8 @@ app.get('/api/raid', async (request) => db.prepare(`SELECT r.*, p.display_name A
 app.post('/api/raid', async (request, reply) => {
   const body = request.body || {};
   if (!body.title || !body.raidType) return reply.code(422).send({ message: 'RAID type and title are required.' });
+  const owner = body.ownerPersonId || request.actor.person_id;
+  if (!activeProjectMember(owner, request.projectId)) return reply.code(422).send({ message: 'Owner must be an active project member.' });
   const id = randomUUID();
   const code = `RAID-${body.raidType.slice(0, 1).toUpperCase()}-${String(db.prepare('SELECT COUNT(*) AS count FROM raid_items WHERE project_id = ?').get(request.projectId).count + 1).padStart(3, '0')}`;
   const probability = body.raidType === 'Risk' ? Number(body.probability || 3) : null;
@@ -1855,8 +1969,8 @@ app.post('/api/raid', async (request, reply) => {
   db.transaction(() => {
     db.prepare(`INSERT INTO raid_items (raid_item_id, project_id, raid_code, raid_type, title, description, owner_person_id, probability, impact, mitigation_plan, escalation_trigger_score, due_date)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(id, request.projectId, code, body.raidType, body.title, body.description || null, request.actor.person_id, probability, impact, body.mitigationPlan || null, 12, body.dueDate || null);
-    audit('raid.create', 'RAID', id, null, { ...body, raidCode: code }, request.actor.person_id);
+      .run(id, request.projectId, code, body.raidType, body.title, body.description || null, owner, probability, impact, body.mitigationPlan || null, 12, body.dueDate || null);
+    audit('raid.create', 'RAID', id, null, { ...body, raidCode: code, ownerPersonId: owner }, request.actor.person_id);
   })();
   return reply.code(201).send({ raidItemId: id, raidCode: code });
 });
@@ -1869,11 +1983,12 @@ app.patch('/api/raid/:raidItemId', async (request, reply) => {
   const before = projectRaid(request.params.raidItemId, request.projectId);
   if (!before) return reply.code(404).send({ message: 'RAID item not found.' });
   const body = request.body || {};
-  const fields = { raidType: 'raid_type', title: 'title', probability: 'probability', impact: 'impact', mitigationPlan: 'mitigation_plan', dueDate: 'due_date', status: 'status' };
+  const fields = { raidType: 'raid_type', title: 'title', ownerPersonId: 'owner_person_id', probability: 'probability', impact: 'impact', mitigationPlan: 'mitigation_plan', dueDate: 'due_date', status: 'status' };
   const changes = Object.entries(fields).filter(([input]) => body[input] !== undefined);
   if (!changes.length) return reply.code(422).send({ message: 'No supported values supplied.' });
   const after = { ...before, ...Object.fromEntries(changes.map(([input, field]) => [field, body[input]])) };
   if (!['Risk', 'Assumption', 'Issue', 'Dependency'].includes(after.raid_type) || !after.title) return reply.code(422).send({ message: 'RAID type and title are required.' });
+  if (!activeProjectMember(after.owner_person_id, request.projectId)) return reply.code(422).send({ message: 'Owner must be an active project member.' });
   if (!['Open', 'Monitoring', 'Mitigated', 'Closed'].includes(after.status)) return reply.code(422).send({ message: 'RAID status is invalid.' });
   if (after.raid_type === 'Risk' && (![after.probability, after.impact].every((value) => Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 5))) {
     return reply.code(422).send({ message: 'Risk probability and impact must be between 1 and 5.' });

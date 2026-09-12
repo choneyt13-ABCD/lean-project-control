@@ -1317,6 +1317,16 @@ app.patch('/api/people/:personId', async (request, reply) => {
       }
       if (body.projectRole !== undefined && before.project_member_id) {
         db.prepare('UPDATE project_members SET project_role = ?, updated_at = CURRENT_TIMESTAMP WHERE project_member_id = ?').run(body.projectRole, before.project_member_id);
+      } else if (body.projectRole !== undefined) {
+        // The People screen also lists people who exist outside the selected
+        // project. Selecting a project role for one of them must create the
+        // missing membership; otherwise the person can look like a team member
+        // in the UI but cannot be selected as an owner or assignee.
+        const membershipId = randomUUID();
+        db.prepare(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm)
+          VALUES (?, ?, ?, ?, 0)`).run(membershipId, request.projectId, before.person_id, body.projectRole);
+        audit('project_member.create', 'ProjectMember', membershipId, null,
+          { personId: before.person_id, projectId: request.projectId, projectRole: body.projectRole }, request.actor.person_id);
       }
       audit('people.update', 'People', before.person_id, before, after, request.actor.person_id);
     })();

@@ -234,6 +234,33 @@ test('changes a work item owner through the structure-editor API contract', asyn
   assert.equal(activeOwners[0].is_primary, 1);
 });
 
+test('adds an existing person to the project when a team role is set', async () => {
+  const people = await fetch(`${baseUrl}/api/people`).then((response) => response.json());
+  const personOutsideProject = people.find((person) => !person.is_project_member);
+  assert.ok(personOutsideProject, 'the seed data must include a person outside the current project');
+
+  const update = await fetch(`${baseUrl}/api/people/${personOutsideProject.person_id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ projectRole: 'TeamMember' })
+  });
+  assert.equal(update.status, 200);
+
+  const refreshedPeople = await fetch(`${baseUrl}/api/people`).then((response) => response.json());
+  const projectMember = refreshedPeople.find((person) => person.person_id === personOutsideProject.person_id);
+  assert.equal(projectMember.is_project_member, 1);
+  assert.equal(projectMember.project_role, 'TeamMember');
+
+  const task = (await fetch(`${baseUrl}/api/tasks`).then((response) => response.json()))[0];
+  const ownerUpdate = await fetch(`${baseUrl}/api/tasks/${task.task_id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_person_id: personOutsideProject.person_id })
+  });
+  assert.equal(ownerUpdate.status, 200);
+  assert.equal((await ownerUpdate.json()).owner_person_id, personOutsideProject.person_id);
+});
+
 test('creates a weekly update and its audit event', async () => {
   const tasks = await fetch(`${baseUrl}/api/tasks`).then((response) => response.json());
   const response = await fetch(`${baseUrl}/api/weekly-updates`, {

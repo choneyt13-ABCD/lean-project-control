@@ -486,14 +486,14 @@ async function raidEditable() {
 async function adminEditable() {
   const [{ current, projects }, people, assignments, roles] = await Promise.all([
     projectContext(),
-    api('/people'),
+    api('/project-members'),
     api('/assignments'),
     api('/roles').catch(() => [])
   ]);
   peopleItems = people;
   assignmentItems = assignments;
   const rolesPanel = `<section class="panel"><div class="panel-head"><div><h2>Team roles (Master data)</h2><span class="subtle">Define project roles, responsibilities, and functional titles.</span></div><div class="row-actions"><button class="secondary" data-seed-roles>Use standard roles</button><button class="primary" data-open-role-master>+ Add team role</button></div></div>${roles.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>ORDER</th><th>CODE</th><th>ROLE NAME</th><th>DESCRIPTION</th><th>MEMBERS</th><th>ACTIONS</th></tr></thead><tbody>${roles.map((role) => `<tr><td>${role.sort_order}</td><td><span class="code inline-code">${role.role_code}</span></td><td><strong>${role.role_name}</strong></td><td>${role.description || '—'}</td><td>${role.member_count}</td><td><div class="row-actions"><button class="secondary" data-edit-role-master="${role.role_id}">Edit</button><button class="secondary" data-delete-role-master="${role.role_id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No team roles defined yet. Add custom roles or use standard templates.</p>'}</section>`;
-  content.innerHTML = `${contextBar(current, projects)}<section class="panel"><div class="panel-head"><div><h2>Team members</h2><span class="subtle">Manage project members and their profile information.</span></div><div class="row-actions"><button class="primary" data-open-person>+ Add person</button></div></div><div class="table-wrap"><table class="table"><thead><tr><th>PERSON</th><th>TEAM / ROLE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${people.map((person) => `<tr><td><strong>${person.display_name}</strong><span class="code">${person.employee_code}</span></td><td>${person.department || 'Not specified'}<small class="cell-note">${person.project_role || 'No role'}${person.position_title ? ` &middot; ${person.position_title}` : ''}</small></td><td>${badge(person.person_status)}</td><td>${actions('person', person.person_id)}</td></tr>`).join('')}</tbody></table></div></section>${rolesPanel}<section class="panel"><div class="panel-head"><div><h2>Current assignments</h2><span class="subtle">One work item can have multiple contributors.</span></div><button class="primary" data-open-assignment>+ Assign work</button></div>${assignments.length ? `<div class="assignment-list">${assignments.map((assignment) => `<article class="assignment-item"><div class="assignment-icon">${assignment.task_code.slice(-2)}</div><div><span class="code">${assignment.task_code}</span><strong>${assignment.task_name}</strong><small>${assignment.display_name}</small></div>${badge(assignment.assignment_role)}${actions('assignment', assignment.task_assignment_id)}</article>`).join('')}</div>` : '<p class="empty">No assignments yet.</p>'}</section>`;
+  content.innerHTML = `${contextBar(current, projects)}<section class="panel"><div class="panel-head"><div><h2>Team members</h2><span class="subtle">Only people assigned to this project appear here and can be selected as an Owner or Assignee.</span></div><div class="row-actions"><button class="secondary" data-open-existing-person>+ Add existing people</button><button class="primary" data-open-person>+ Add person</button></div></div>${people.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>PERSON</th><th>TEAM / ROLE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${people.map((person) => `<tr><td><strong>${person.display_name}</strong><span class="code">${person.employee_code}</span></td><td>${person.department || 'Not specified'}<small class="cell-note">${person.project_role || 'No role'}${person.position_title ? ` &middot; ${person.position_title}` : ''}</small></td><td>${badge(person.person_status)}</td><td>${actions('person', person.person_id)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No project members yet. Add existing people or create a new person.</p>'}</section>${rolesPanel}<section class="panel"><div class="panel-head"><div><h2>Current assignments</h2><span class="subtle">One work item can have multiple contributors.</span></div><button class="primary" data-open-assignment>+ Assign work</button></div>${assignments.length ? `<div class="assignment-list">${assignments.map((assignment) => `<article class="assignment-item"><div class="assignment-icon">${assignment.task_code.slice(-2)}</div><div><span class="code">${assignment.task_code}</span><strong>${assignment.task_name}</strong><small>${assignment.display_name}</small></div>${badge(assignment.assignment_role)}${actions('assignment', assignment.task_assignment_id)}</article>`).join('')}</div>` : '<p class="empty">No assignments yet.</p>'}</section>`;
 }
 
 async function audit() {
@@ -1062,6 +1062,16 @@ async function personModal(person) {
   modal.showModal();
 }
 
+async function existingPeopleModal() {
+  const [directory, members, roles] = await Promise.all([api('/people'), api('/project-members'), api('/roles').catch(() => [])]);
+  const memberIds = new Set(members.map((person) => person.person_id));
+  const availablePeople = directory.filter((person) => person.person_status === 'Active' && !memberIds.has(person.person_id));
+  const availableRoles = roles.length ? roles : [{ role_code: 'TeamMember', role_name: 'Team Member' }];
+  modalContent.innerHTML = `<h2 class="form-title">Add existing people to this project</h2><p class="subtle">Select one or more people. They will be available for Owner and Assignee immediately.</p>${availablePeople.length ? `<div class="form-grid"><label class="full">People<select name="personIds" multiple size="${Math.min(10, availablePeople.length)}" required>${availablePeople.map((person) => `<option value="${person.person_id}">${person.display_name} (${person.employee_code})</option>`).join('')}</select></label><label>Project role<select name="projectRole">${availableRoles.map((role) => `<option value="${role.role_code}">${role.role_name} (${role.role_code})</option>`).join('')}</select></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Add selected people</button></div>` : '<p class="empty">All active people are already members of this project.</p>'}`;
+  if (availablePeople.length) form.onsubmit = async (event) => { event.preventDefault(); const values = new FormData(form); const projectRole = values.get('projectRole'); try { await Promise.all(values.getAll('personIds').map((personId) => api(`/people/${personId}`, { method: 'PATCH', body: JSON.stringify({ projectRole }) }))); modal.close(); showToast('Selected people added to this project.'); navigate('admin'); } catch (error) { showToast(error.message); } };
+  modal.showModal();
+}
+
 function roleMasterModal(role) {
   const isEdit = Boolean(role);
   modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit team role' : 'Add team role (Master data)'}</h2>
@@ -1463,7 +1473,7 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
-  const target = event.target.closest('[data-go], .nav, [data-control-portal-session], [data-portal-session], [data-weekly-portal-session], [data-select-project], [data-open-project], [data-edit-project], [data-open-template-import], [data-open-activity], [data-open-task], [data-update-task], [data-add-task-child], [data-add-subtask-child], [data-add-task-to-wbs], [data-add-activity-to-phase], [data-open-update], [data-open-weekly-plan], [data-open-role-update], [data-open-raid], [data-open-person], [data-open-assignment], [data-edit-task], [data-edit-activity], [data-edit-update], [data-edit-plan], [data-edit-role], [data-edit-raid], [data-edit-person], [data-edit-assignment], [data-delete-task], [data-delete-activity], [data-delete-update], [data-delete-plan], [data-delete-role], [data-delete-raid], [data-delete-person], [data-delete-assignment], [data-group-toggle], [data-parent-toggle]');
+  const target = event.target.closest('[data-go], .nav, [data-control-portal-session], [data-portal-session], [data-weekly-portal-session], [data-select-project], [data-open-project], [data-edit-project], [data-open-template-import], [data-open-activity], [data-open-task], [data-update-task], [data-add-task-child], [data-add-subtask-child], [data-add-task-to-wbs], [data-add-activity-to-phase], [data-open-update], [data-open-weekly-plan], [data-open-role-update], [data-open-raid], [data-open-person], [data-open-existing-person], [data-open-assignment], [data-edit-task], [data-edit-activity], [data-edit-update], [data-edit-plan], [data-edit-role], [data-edit-raid], [data-edit-person], [data-edit-assignment], [data-delete-task], [data-delete-activity], [data-delete-update], [data-delete-plan], [data-delete-role], [data-delete-raid], [data-delete-person], [data-delete-assignment], [data-group-toggle], [data-parent-toggle]');
   if (!target) return;
   if (target.dataset.parentToggle) {
     const parentId = target.dataset.parentToggle;
@@ -1505,6 +1515,7 @@ document.addEventListener('click', async (event) => {
   if (target.matches('[data-open-role-update]')) return roleUpdateModal();
   if (target.matches('[data-open-raid]')) return raidModal();
   if (target.matches('[data-open-person]')) return personModal();
+  if (target.matches('[data-open-existing-person]')) return existingPeopleModal();
   if (target.matches('[data-open-assignment]')) return assignmentModal();
   const edit = ['task', 'activity', 'update', 'plan', 'role', 'raid', 'person', 'assignment'].find((type) => target.dataset[`edit${type[0].toUpperCase()}${type.slice(1)}`] !== undefined);
   if (edit) {

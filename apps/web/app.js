@@ -1048,9 +1048,7 @@ async function personModal(person) {
   const defaultRoles = [
     { role_code: 'TeamMember', role_name: 'Team Member' },
     { role_code: 'ProjectAdmin', role_name: 'Project Admin' },
-    { role_code: 'BALead', role_name: 'BA Lead' },
     { role_code: 'DEVLead', role_name: 'DEV Lead' },
-    { role_code: 'QALead', role_name: 'QA Lead' },
     { role_code: 'Reviewer', role_name: 'Reviewer' }
   ];
   const availableRoles = roles.length ? [...roles] : defaultRoles;
@@ -1106,7 +1104,7 @@ function roleMasterModal(role) {
 async function assignmentModal(assignment) {
   const [people, workItems, roles] = await Promise.all([api('/project-members'), api('/tasks'), api('/roles').catch(() => [])]);
   const members = people;
-  const standardAssignRoles = ['Owner', 'BA', 'DEV', 'QA', 'Reviewer', 'Contributor', 'Observer'];
+  const standardAssignRoles = ['Owner', 'DEV', 'Reviewer', 'Contributor', 'Observer'];
   const customRoleCodes = (roles || []).map((r) => r.role_code).filter((c) => !standardAssignRoles.includes(c));
   const allAssignmentRoles = [...standardAssignRoles, ...customRoleCodes];
 

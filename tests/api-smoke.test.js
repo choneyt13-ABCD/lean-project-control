@@ -161,20 +161,33 @@ test('adds a new person as an RRMS member before assignment', async () => {
   const personResponse = await fetch(`${baseUrl}/api/people`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ employeeCode: 'AUTO-QA-01', displayName: 'Automated QA', projectRole: 'QALead' })
+    body: JSON.stringify({ employeeCode: 'AUTO-TEAM-01', displayName: 'Automated Team Member', projectRole: 'TeamMember' })
   });
   assert.equal(personResponse.status, 201);
   const { personId } = await personResponse.json();
   const people = await fetch(`${baseUrl}/api/people`).then((response) => response.json());
-  assert.equal(people.find((person) => person.person_id === personId).project_role, 'QALead');
+  assert.equal(people.find((person) => person.person_id === personId).project_role, 'TeamMember');
 
   const tasks = await fetch(`${baseUrl}/api/tasks`).then((response) => response.json());
   const assignmentResponse = await fetch(`${baseUrl}/api/assignments`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ taskId: tasks[0].task_id, personId, assignmentRole: 'QA' })
+    body: JSON.stringify({ taskId: tasks[0].task_id, personId, assignmentRole: 'Contributor' })
   });
   assert.equal(assignmentResponse.status, 201);
+});
+
+test('retires BA and QA roles from project team and assignment options', async () => {
+  const roles = await fetch(`${baseUrl}/api/roles`).then((response) => response.json());
+  assert.equal(roles.some((role) => ['BA', 'BALead', 'QA', 'QALead'].includes(role.role_code)), false);
+
+  const task = (await fetch(`${baseUrl}/api/tasks`).then((response) => response.json()))[0];
+  const person = (await fetch(`${baseUrl}/api/people`).then((response) => response.json())).find((item) => item.employee_code === 'DEMO-RRMS-BA');
+  const response = await fetch(`${baseUrl}/api/assignments`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ taskId: task.task_id, personId: person.person_id, assignmentRole: 'QA' })
+  });
+  assert.equal(response.status, 422);
 });
 
 test('keeps the task owner in sync when an Owner assignment is created', async () => {
@@ -561,7 +574,7 @@ test('hides cancelled projects from control views while retaining them in projec
 
 test('manages team roles master data and assigns custom roles to people', async () => {
   const roles = await fetch(`${baseUrl}/api/roles`).then((r) => r.json());
-  assert.ok(roles.length >= 7);
+  assert.ok(roles.length >= 5);
   assert.ok(roles.some((r) => r.role_code === 'TeamMember'));
 
   const createRoleRes = await fetch(`${baseUrl}/api/roles`, {

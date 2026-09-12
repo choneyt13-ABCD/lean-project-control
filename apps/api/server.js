@@ -294,8 +294,8 @@ const defaultProjectId = '30000000-0000-0000-0000-000000000001';
 const secondProjectId = '30000000-0000-0000-0000-000000000002';
 const defaultDemoLogin = process.env.DEMO_LOGIN_NAME || 'rrms.demo.pm';
 const allowDemoIdentityOverride = process.env.ALLOW_DEMO_IDENTITY_OVERRIDE === 'true';
-const assignmentRoles = new Set(['Owner', 'BA', 'DEV', 'QA', 'Reviewer', 'Contributor', 'Observer']);
-const projectRoles = new Set(['PM', 'ProjectAdmin', 'BALead', 'DEVLead', 'QALead', 'TeamMember', 'Reviewer']);
+const assignmentRoles = new Set(['Owner', 'DEV', 'Reviewer', 'Contributor', 'Observer']);
+const projectRoles = new Set(['PM', 'ProjectAdmin', 'DEVLead', 'TeamMember', 'Reviewer']);
 const taskStatuses = new Set(['NotStarted', 'InProgress', 'OnHold', 'Blocked', 'Done', 'Cancelled']);
 const ragStatuses = new Set(['Green', 'Amber', 'Red']);
 function isValidProjectType(name) {
@@ -322,8 +322,7 @@ function isValidAssignmentRole(role, projectId) {
 function activeProjectMember(personId, scopedProjectId) {
   return db.prepare(`SELECT pm.* FROM project_members pm JOIN people p ON p.person_id = pm.person_id
     WHERE pm.project_id = ? AND pm.person_id = ? AND pm.deleted_at IS NULL AND p.deleted_at IS NULL
-      AND (pm.active_from IS NULL OR pm.active_from <= date('now'))
-      AND (pm.active_to IS NULL OR pm.active_to >= date('now')) LIMIT 1`).get(scopedProjectId, personId);
+      AND p.person_status = 'Active' LIMIT 1`).get(scopedProjectId, personId);
 }
 
 function projectTask(taskId, scopedProjectId) {
@@ -391,12 +390,18 @@ function seedStandardWorkstreams(projectId) {
 const standardRoles = [
   { code: 'PM', name: 'Project Manager', desc: 'Project oversight, planning & coordination', sort: 1 },
   { code: 'ProjectAdmin', name: 'Project Admin', desc: 'Administrative and operational management', sort: 2 },
-  { code: 'BALead', name: 'BA Lead / Business Analyst', desc: 'Requirement gathering & business analysis', sort: 3 },
-  { code: 'DEVLead', name: 'DEV Lead / Developer', desc: 'Software architecture & development', sort: 4 },
-  { code: 'QALead', name: 'QA Lead / Quality Assurance', desc: 'Testing, verification & quality control', sort: 5 },
-  { code: 'TeamMember', name: 'Team Member', desc: 'Core contributor & task delivery', sort: 6 },
-  { code: 'Reviewer', name: 'Reviewer', desc: 'Review, validation & sign-off', sort: 7 }
+  { code: 'DEVLead', name: 'DEV Lead / Developer', desc: 'Software architecture & development', sort: 3 },
+  { code: 'TeamMember', name: 'Team Member', desc: 'Core contributor & task delivery', sort: 4 },
+  { code: 'Reviewer', name: 'Reviewer', desc: 'Review, validation & sign-off', sort: 5 }
 ];
+
+// BA and QA are no longer project or assignment roles. Preserve each person's
+// project membership by moving the retired role to the generic Team Member role.
+db.transaction(() => {
+  db.prepare("UPDATE project_members SET project_role = 'TeamMember', updated_at = CURRENT_TIMESTAMP WHERE project_role IN ('BA', 'BALead', 'QA', 'QALead') AND deleted_at IS NULL").run();
+  db.prepare("UPDATE task_assignments SET assignment_role = 'Contributor', updated_at = CURRENT_TIMESTAMP WHERE assignment_role IN ('BA', 'QA') AND deleted_at IS NULL").run();
+  db.prepare("UPDATE project_roles SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE role_code IN ('BA', 'BALead', 'QA', 'QALead') AND deleted_at IS NULL").run();
+})();
 
 function seedStandardRoles(projectId) {
   const insert = db.prepare(`INSERT INTO project_roles (role_id, project_id, role_code, role_name, description, sort_order)
@@ -1295,8 +1300,6 @@ app.get('/api/project-members', async (request) => db.prepare(`SELECT p.person_i
   FROM project_members pm JOIN people p ON p.person_id = pm.person_id
   WHERE pm.project_id = ? AND pm.deleted_at IS NULL AND p.deleted_at IS NULL AND p.person_status = 'Active'
     AND (p.employee_code <> 'DEMO-RRMS-PM' OR pm.is_main_pm = 1)
-    AND (pm.active_from IS NULL OR pm.active_from <= date('now'))
-    AND (pm.active_to IS NULL OR pm.active_to >= date('now'))
   ORDER BY p.display_name`).all(request.projectId));
 
 app.post('/api/people', async (request, reply) => {

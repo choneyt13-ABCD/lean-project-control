@@ -6,7 +6,7 @@ const modalContent = document.querySelector('#modal-content');
 const form = document.querySelector('#modal-form');
 const toast = document.querySelector('#toast');
 
-let activeProjectId = null;
+let activeProjectId = localStorage.getItem('lean_active_project_id') || null;
 let tasks = [];
 let weeklyItems = [];
 let weeklyPlans = [];
@@ -572,6 +572,7 @@ async function projectModal(project) {
         const { projectId } = await api('/projects', { method: 'POST', body: JSON.stringify(values) });
         modal.close();
         activeProjectId = projectId;
+        localStorage.setItem('lean_active_project_id', projectId);
         tasks = [];
         showToast('Project created.');
         navigate(activePage);
@@ -626,11 +627,11 @@ async function openTaskModal(context = {}) {
   const [{ current }, wbs, people, currentTasks, workstreams] = await Promise.all([
     projectContext(),
     api('/wbs'),
-    api('/people'),
+    api('/project-members'),
     api('/tasks'),
     api('/workstreams')
   ]);
-  const members = people.filter((person) => person.is_project_member);
+  const members = people;
 
   let initialParentId = context.parentTaskId || '';
   let initialParent = initialParentId ? currentTasks.find((t) => t.task_id === initialParentId) : null;
@@ -752,8 +753,8 @@ async function openTaskModal(context = {}) {
 }
 
 async function legacyEditTask(task) {
-  const [people, workstreams] = await Promise.all([api('/people'), api('/workstreams')]);
-  const members = people.filter((person) => person.is_project_member);
+  const [people, workstreams] = await Promise.all([api('/project-members'), api('/workstreams')]);
+  const members = people;
   const hasChildren = tasks.some((t) => t.parent_task_id === task.task_id);
   modalContent.innerHTML = `<h2 class="form-title">Edit work item</h2>
     <div class="form-grid">
@@ -829,8 +830,8 @@ async function legacyEditTask(task) {
 
 async function editTask(task) {
   if (!task) return;
-  const [people, workstreams] = await Promise.all([api('/people'), api('/workstreams')]);
-  const members = people.filter((person) => person.is_project_member);
+  const [people, workstreams] = await Promise.all([api('/project-members'), api('/workstreams')]);
+  const members = people;
   if (!members.length) {
     showToast('Add an active project member before assigning an owner.');
     return;
@@ -1014,8 +1015,8 @@ function taskProgressModal(task) {
 }
 
 async function weeklyPlanModal(item) {
-  const [workItems, people] = await Promise.all([api('/tasks'), api('/people')]);
-  const members = people.filter((person) => person.is_project_member);
+  const [workItems, people] = await Promise.all([api('/tasks'), api('/project-members')]);
+  const members = people;
   const isEdit = Boolean(item);
   modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit weekly plan' : 'Add weekly plan'}</h2><p class="subtle">Define a commitment and its expected outcome. Linking a work item is optional.</p><div class="form-grid"><label>Week start<input name="weekStartDate" type="date" required value="${item?.week_start_date || controlWeek}"></label><label>Priority<select name="priority">${['Low', 'Medium', 'High', 'Critical'].map((value) => `<option ${selected(item?.priority || 'Medium', value)}>${value}</option>`).join('')}</select></label><label class="full">Commitment<input name="planTitle" required value="${item?.plan_title || ''}" placeholder="What must be achieved this week?"></label><label class="full">Linked work item (optional)<select name="taskId"><option value="">Project-level commitment</option>${workItems.map((task) => `<option value="${task.task_id}" ${selected(item?.task_id, task.task_id)}>${task.task_code} — ${task.task_name}</option>`).join('')}</select></label><label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(item?.owner_person_id, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Owner role<input name="ownerRole" value="${item?.owner_role || ''}" placeholder="e.g. PM, BA, QA"></label><label>Due date<input name="plannedDueDate" type="date" value="${item?.planned_due_date || ''}"></label><label>Status<select name="status">${['Planned', 'InProgress', 'Done', 'Deferred'].map((value) => `<option value="${value}" ${selected(item?.status || 'Planned', value)}>${value === 'InProgress' ? 'In progress' : value}</option>`).join('')}</select></label><label class="full">Expected outcome<textarea name="targetOutcome" placeholder="What evidence or result will show this is complete?">${item?.target_outcome || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Add to weekly plan'}</button></div>`;
   form.onsubmit = async (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(form)); try { await api(isEdit ? `/weekly-plans/${item.weekly_plan_id}` : '/weekly-plans', { method: isEdit ? 'PATCH' : 'POST', body: JSON.stringify(values) }); modal.close(); showToast(isEdit ? 'Weekly plan updated.' : 'Weekly plan added.'); navigate('updates'); } catch (error) { showToast(error.message); } };
@@ -1023,8 +1024,8 @@ async function weeklyPlanModal(item) {
 }
 
 async function roleUpdateModal(item) {
-  const people = await api('/people');
-  const members = people.filter((person) => person.is_project_member);
+  const people = await api('/project-members');
+  const members = people;
   const isEdit = Boolean(item);
   modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit role update' : 'Add role update'}</h2><p class="subtle">Summarize the role's movement. Task-by-task details stay in Task progress updates.</p><div class="form-grid"><label>Week start<input name="weekStartDate" type="date" required value="${item?.week_start_date || controlWeek}"></label><label>Person<select name="personId">${members.map((person) => `<option value="${person.person_id}" ${selected(item?.person_id, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label class="full">Role<input name="roleName" required value="${item?.role_name || ''}" placeholder="e.g. Project Manager, Business Analyst"></label><label class="full">Accomplished<textarea name="accomplished" placeholder="What moved or was completed?">${item?.accomplished || ''}</textarea></label><label class="full">Next actions<textarea name="nextActions" placeholder="What will this role do next?">${item?.next_actions || ''}</textarea></label><label class="full">Blocker<textarea name="blocker" placeholder="What is preventing progress?">${item?.blocker || ''}</textarea></label><label class="full">Support needed<textarea name="supportNeeded" placeholder="What decision or help is required?">${item?.support_needed || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Submit role update'}</button></div>`;
   form.onsubmit = async (event) => { event.preventDefault(); try { await api(isEdit ? `/role-updates/${item.role_update_id}` : '/role-updates', { method: isEdit ? 'PATCH' : 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) }); modal.close(); showToast(isEdit ? 'Role update changed.' : 'Role update submitted.'); navigate('updates'); } catch (error) { showToast(error.message); } };
@@ -1032,8 +1033,8 @@ async function roleUpdateModal(item) {
 }
 
 async function raidModal(item) {
-  const [people, session] = await Promise.all([api('/people'), api('/session')]);
-  const members = people.filter((person) => person.is_project_member);
+  const [people, session] = await Promise.all([api('/project-members'), api('/session')]);
+  const members = people;
   const selectedOwnerId = item?.owner_person_id || session.personId || members[0]?.person_id;
   const isEdit = Boolean(item);
   modalContent.innerHTML = `<h2 class="form-title">${isEdit ? 'Edit RAID item' : 'Add RAID item'}</h2><div class="form-grid"><label>Type<select name="raidType">${['Risk', 'Assumption', 'Issue', 'Dependency'].map((value) => `<option ${selected(item?.raid_type || 'Risk', value)}>${value}</option>`).join('')}</select></label><label>Status<select name="status">${['Open', 'Monitoring', 'Mitigated', 'Closed'].map((value) => `<option ${selected(item?.status || 'Open', value)}>${value}</option>`).join('')}</select></label><label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(selectedOwnerId, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Due date<input type="date" name="dueDate" value="${item?.due_date || ''}"></label><label class="full">Title<input name="title" required value="${item?.title || ''}"></label><label>Probability<input name="probability" type="number" min="1" max="5" value="${item?.probability || 3}"></label><label>Impact<input name="impact" type="number" min="1" max="5" value="${item?.impact || 3}"></label><label class="full">Mitigation plan<textarea name="mitigationPlan">${item?.mitigation_plan || ''}</textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">${isEdit ? 'Save changes' : 'Create item'}</button></div>`;
@@ -1093,8 +1094,8 @@ function roleMasterModal(role) {
 }
 
 async function assignmentModal(assignment) {
-  const [people, workItems, roles] = await Promise.all([api('/people'), api('/tasks'), api('/roles').catch(() => [])]);
-  const members = people.filter((person) => person.is_project_member);
+  const [people, workItems, roles] = await Promise.all([api('/project-members'), api('/tasks'), api('/roles').catch(() => [])]);
+  const members = people;
   const standardAssignRoles = ['Owner', 'BA', 'DEV', 'QA', 'Reviewer', 'Contributor', 'Observer'];
   const customRoleCodes = (roles || []).map((r) => r.role_code).filter((c) => !standardAssignRoles.includes(c));
   const allAssignmentRoles = [...standardAssignRoles, ...customRoleCodes];
@@ -1413,6 +1414,7 @@ document.addEventListener('change', (event) => {
   const projectSelector = event.target.closest('[data-project-context]');
   if (projectSelector) {
     activeProjectId = projectSelector.value;
+    localStorage.setItem('lean_active_project_id', activeProjectId);
     tasks = [];
     showToast('Project context changed.');
     const activePage = document.querySelector('.nav.active')?.dataset.page || 'projects';
@@ -1479,7 +1481,7 @@ document.addEventListener('click', async (event) => {
     return;
   }
   const selectedProject = target.dataset.selectProject;
-  if (selectedProject) { activeProjectId = selectedProject; tasks = []; }
+  if (selectedProject) { activeProjectId = selectedProject; localStorage.setItem('lean_active_project_id', activeProjectId); tasks = []; }
   if (target.dataset.controlPortalSession) { controlPortalSession = target.dataset.controlPortalSession; localStorage.setItem('lean_control_portal_session', controlPortalSession); navigate('project-control'); return; }
   if (target.dataset.portalSession) { portalSession = target.dataset.portalSession; localStorage.setItem('lean_portal_session', portalSession); navigate('portal'); return; }
   if (target.dataset.weeklyPortalSession) { weeklyPortalSession = target.dataset.weeklyPortalSession; localStorage.setItem('lean_weekly_portal_session', weeklyPortalSession); navigate('weekly-portal'); return; }

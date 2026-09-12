@@ -1290,6 +1290,14 @@ app.get('/api/people', async (request) => db.prepare(`SELECT p.person_id, p.empl
   FROM people p LEFT JOIN project_members pm ON pm.person_id = p.person_id AND pm.project_id = ? AND pm.deleted_at IS NULL
   WHERE p.deleted_at IS NULL ORDER BY p.display_name`).all(request.projectId));
 
+app.get('/api/project-members', async (request) => db.prepare(`SELECT p.person_id, p.employee_code, p.display_name, p.email, p.department, p.position_title, p.person_status,
+    pm.project_member_id, pm.project_role, pm.is_main_pm, 1 AS is_project_member
+  FROM project_members pm JOIN people p ON p.person_id = pm.person_id
+  WHERE pm.project_id = ? AND pm.deleted_at IS NULL AND p.deleted_at IS NULL AND p.person_status = 'Active'
+    AND (pm.active_from IS NULL OR pm.active_from <= date('now'))
+    AND (pm.active_to IS NULL OR pm.active_to >= date('now'))
+  ORDER BY p.display_name`).all(request.projectId));
+
 app.post('/api/people', async (request, reply) => {
   const body = request.body || {};
   if (!body.employeeCode || !body.displayName) return reply.code(422).send({ message: 'Employee code and display name are required.' });

@@ -38,7 +38,7 @@ test.after(async () => {
 });
 
 test('serves the walkthrough and all read endpoints', async () => {
-  const paths = ['/', '/api/session', '/api/portfolio', '/api/project', '/api/dashboard', '/api/master-control?weekStart=2026-08-31', '/api/tasks', '/api/wbs', '/api/people', '/api/assignments', '/api/weekly-plans?weekStart=2026-08-31', '/api/role-updates?weekStart=2026-08-31', '/api/weekly-updates', '/api/raid', '/api/audit'];
+  const paths = ['/', '/api/session', '/api/portfolio', '/api/project', '/api/dashboard', '/api/master-control?weekStart=2026-08-31', '/api/tasks', '/api/wbs', '/api/people', '/api/project-members', '/api/assignments', '/api/weekly-plans?weekStart=2026-08-31', '/api/role-updates?weekStart=2026-08-31', '/api/weekly-updates', '/api/raid', '/api/audit'];
   for (const endpoint of paths) {
     const response = await fetch(`${baseUrl}${endpoint}`);
     assert.equal(response.status, 200, endpoint);
@@ -426,6 +426,9 @@ test('creates a project, activity, and task in the selected project', async () =
   const selectedTeamMember = projectPeople.find((person) => person.person_id === projectTeamMember.person_id);
   assert.equal(selectedTeamMember.is_project_member, 1);
   assert.equal(selectedTeamMember.project_role, 'TeamMember');
+
+  const projectMembers = await fetch(`${baseUrl}/api/project-members`, { headers: selectedHeaders }).then((response) => response.json());
+  assert.ok(projectMembers.some((person) => person.person_id === projectTeamMember.person_id && person.project_role === 'TeamMember'));
 
   const initialPhases = await fetch(`${baseUrl}/api/phases`, { headers: selectedHeaders }).then((response) => response.json());
   assert.equal(initialPhases.length, 0);

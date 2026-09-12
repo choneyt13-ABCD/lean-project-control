@@ -1294,6 +1294,7 @@ app.get('/api/project-members', async (request) => db.prepare(`SELECT p.person_i
     pm.project_member_id, pm.project_role, pm.is_main_pm, 1 AS is_project_member
   FROM project_members pm JOIN people p ON p.person_id = pm.person_id
   WHERE pm.project_id = ? AND pm.deleted_at IS NULL AND p.deleted_at IS NULL AND p.person_status = 'Active'
+    AND (p.employee_code <> 'DEMO-RRMS-PM' OR pm.is_main_pm = 1)
     AND (pm.active_from IS NULL OR pm.active_from <= date('now'))
     AND (pm.active_to IS NULL OR pm.active_to >= date('now'))
   ORDER BY p.display_name`).all(request.projectId));

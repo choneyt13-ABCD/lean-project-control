@@ -209,6 +209,31 @@ test('keeps the task owner in sync when an Owner assignment is created', async (
   assert.deepEqual(await deleteResponse.json(), { message: 'Assign a new Owner before deleting the current Owner assignment.' });
 });
 
+test('changes a work item owner through the structure-editor API contract', async () => {
+  const [people, taskItems] = await Promise.all([
+    fetch(`${baseUrl}/api/people`).then((response) => response.json()),
+    fetch(`${baseUrl}/api/tasks`).then((response) => response.json())
+  ]);
+  const task = taskItems[0];
+  const newOwner = people.find((person) => person.is_project_member && person.person_id !== task.owner_person_id);
+  assert.ok(newOwner, 'the seed data must include a second active project member');
+
+  const response = await fetch(`${baseUrl}/api/tasks/${task.task_id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ owner_person_id: newOwner.person_id })
+  });
+  assert.equal(response.status, 200);
+  const saved = await response.json();
+  assert.equal(saved.owner_person_id, newOwner.person_id);
+  assert.equal(saved.owner_name, newOwner.display_name);
+
+  const assignments = await fetch(`${baseUrl}/api/assignments`).then((result) => result.json());
+  const activeOwners = assignments.filter((item) => item.task_id === task.task_id && item.assignment_role === 'Owner');
+  assert.deepEqual(activeOwners.map((item) => item.person_id), [newOwner.person_id]);
+  assert.equal(activeOwners[0].is_primary, 1);
+});
+
 test('creates a weekly update and its audit event', async () => {
   const tasks = await fetch(`${baseUrl}/api/tasks`).then((response) => response.json());
   const response = await fetch(`${baseUrl}/api/weekly-updates`, {

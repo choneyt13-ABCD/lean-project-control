@@ -826,12 +826,16 @@ async function editTask(task) {
   if (!task) return;
   const [people, workstreams] = await Promise.all([api('/people'), api('/workstreams')]);
   const members = people.filter((person) => person.is_project_member);
+  if (!members.length) {
+    showToast('Add an active project member before assigning an owner.');
+    return;
+  }
   modalContent.innerHTML = `<h2 class="form-title">Edit work item structure</h2><p class="subtle">Change the work item definition, ownership, and planned due date here. Record status and progress in Work items.</p><div class="form-grid"><label class="full">Work item name<input name="taskName" required value="${task.task_name}"></label><label>Owner<select name="ownerPersonId">${members.map((person) => `<option value="${person.person_id}" ${selected(task.owner_person_id, person.person_id)}>${person.display_name}</option>`).join('')}</select></label><label>Workstream<select name="workstream"><option value="">None / General</option>${workstreams.map((ws) => `<option value="${ws.workstream_name}" ${selected(task.workstream, ws.workstream_name)}>${ws.workstream_code} — ${ws.workstream_name}</option>`).join('')}</select></label><label>Due date<input name="dueDate" type="date" value="${task.planned_due_date || ''}"></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save structure</button></div>`;
   form.onsubmit = async (event) => {
     event.preventDefault();
     const values = new FormData(form);
     try {
-      await api(`/tasks/${task.task_id}`, {
+      const saved = await api(`/tasks/${task.task_id}`, {
         method: 'PATCH',
         body: JSON.stringify({
           task_name: values.get('taskName'),
@@ -840,9 +844,12 @@ async function editTask(task) {
           planned_due_date: values.get('dueDate') || null
         })
       });
+      if (saved.owner_person_id !== values.get('ownerPersonId')) {
+        throw new Error('Owner was not saved. Please try again.');
+      }
       modal.close();
       tasks = [];
-      showToast('Work item structure saved.');
+      showToast(`Work item structure saved. Owner: ${saved.owner_name}.`);
       const activePage = document.querySelector('.nav.active')?.dataset.page || 'structure';
       navigate(activePage);
     } catch (error) {

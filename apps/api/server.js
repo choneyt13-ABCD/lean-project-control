@@ -1585,15 +1585,20 @@ app.patch('/api/tasks/:taskId', async (request, reply) => {
   const before = db.prepare('SELECT * FROM tasks WHERE task_id = ? AND project_id = ?').get(request.params.taskId, request.projectId);
   if (!before) return reply.code(404).send({ message: 'Task not found.' });
   const body = request.body || {};
-  const owner = body.owner_person_id || body.ownerPersonId;
-  if (owner !== undefined && !activeProjectMember(owner, request.projectId)) {
+  // Accept the snake_case field used by the structure editor and the camelCase
+  // field used by creation flows.  Detect the field by presence, rather than
+  // truthiness, so an empty selection gets a useful validation response instead
+  // of attempting to write an invalid foreign key.
+  const ownerSupplied = Object.hasOwn(body, 'owner_person_id') || Object.hasOwn(body, 'ownerPersonId');
+  const owner = Object.hasOwn(body, 'owner_person_id') ? body.owner_person_id : body.ownerPersonId;
+  if (ownerSupplied && (typeof owner !== 'string' || !owner.trim() || !activeProjectMember(owner, request.projectId))) {
     return reply.code(422).send({ message: 'Owner is not an active project member.' });
   }
 
   const fields = ['task_name', 'status', 'rag_status', 'progress', 'planned_due_date', 'workstream', 'owner_person_id'];
   const mappedBody = {
     ...body,
-    ...(owner !== undefined ? { owner_person_id: owner } : {})
+    ...(ownerSupplied ? { owner_person_id: owner.trim() } : {})
   };
 
   // Auto-sync status and progress when only one is provided
@@ -1625,7 +1630,7 @@ app.patch('/api/tasks/:taskId', async (request, reply) => {
         if (field === 'workstream') return typeof mappedBody[field] === 'string' ? mappedBody[field].trim() || null : mappedBody[field];
         return mappedBody[field];
       }), before.task_id);
-    if (owner) {
+    if (ownerSupplied) {
       setTaskOwner(before.task_id, owner);
     }
     if (before.parent_task_id) {

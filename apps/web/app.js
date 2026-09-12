@@ -546,7 +546,10 @@ async function projectModal(project) {
       <label>Target end date<input name="targetEndDate" type="date" value="${project?.target_end_date || ''}"></label>
       <label class="full">Main PM<select name="mainPmPersonId">
         ${people.map((p) => `<option value="${p.person_id}" ${selected(selectedPmId, p.person_id)}>${p.display_name} (${p.employee_code})</option>`).join('')}
-      </select></label>
+      </select></label>${isEdit ? '' : `
+      <label class="full">Project team members <small>Optional — hold Ctrl/Cmd to select more than one person. They will be available as Owner and Assignee in this project.</small><select name="teamMemberIds" multiple size="${Math.min(Math.max(people.length, 3), 7)}">
+        ${people.map((p) => `<option value="${p.person_id}">${p.display_name} (${p.employee_code})</option>`).join('')}
+      </select></label>`}
     </div>
     <div class="actions">
       <button class="secondary" value="cancel">Cancel</button>
@@ -555,7 +558,9 @@ async function projectModal(project) {
 
   form.onsubmit = async (event) => {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(form));
+    const formData = new FormData(form);
+    const values = Object.fromEntries(formData);
+    if (!isEdit) values.teamMemberIds = formData.getAll('teamMemberIds');
     try {
       const activePage = document.querySelector('.nav.active')?.dataset.page || 'projects';
       if (isEdit) {

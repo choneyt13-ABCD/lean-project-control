@@ -937,8 +937,17 @@ app.post('/api/projects', async (request, reply) => {
   if (body.projectSize && !projectSizes.has(body.projectSize)) return reply.code(422).send({ message: 'Project size is invalid.' });
   const id = randomUUID();
   const mainPm = body.mainPmPersonId || request.actor.person_id;
+  const selectedTeamMemberIds = [...new Set((Array.isArray(body.teamMemberIds) ? body.teamMemberIds : [body.teamMemberIds])
+    .filter((personId) => typeof personId === 'string' && personId.trim())
+    .map((personId) => personId.trim()))];
   const mainPmPerson = db.prepare("SELECT 1 FROM people WHERE person_id = ? AND person_status = 'Active' AND deleted_at IS NULL").get(mainPm);
   if (!mainPmPerson) return reply.code(422).send({ message: 'Main PM must be an active person.' });
+  if (selectedTeamMemberIds.length) {
+    const marks = selectedTeamMemberIds.map(() => '?').join(', ');
+    const validCount = db.prepare(`SELECT COUNT(*) AS count FROM people
+      WHERE person_id IN (${marks}) AND person_status = 'Active' AND deleted_at IS NULL`).get(...selectedTeamMemberIds).count;
+    if (validCount !== selectedTeamMemberIds.length) return reply.code(422).send({ message: 'Every selected team member must be active.' });
+  }
   try {
     db.transaction(() => {
       db.prepare(`INSERT INTO projects (project_id, project_code, project_name, portfolio_name, project_type, project_size, main_pm_person_id, project_status, rag_status, start_date, target_end_date)
@@ -949,6 +958,14 @@ app.post('/api/projects', async (request, reply) => {
       if (request.actor.person_id !== mainPm) {
         db.prepare(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm)
           VALUES (?, ?, ?, 'PM', 0)`).run(randomUUID(), id, request.actor.person_id);
+      }
+      const addTeamMember = db.prepare(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm)
+        VALUES (?, ?, ?, 'TeamMember', 0)`);
+      for (const personId of selectedTeamMemberIds) {
+        // Main PM and the project creator already have their own membership.
+        if (personId !== mainPm && personId !== request.actor.person_id) {
+          addTeamMember.run(randomUUID(), id, personId);
+        }
       }
       seedStandardWorkstreams(id);
       seedStandardRoles(id);

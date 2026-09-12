@@ -411,13 +411,21 @@ test('edits and soft-deletes mock records', async () => {
 });
 
 test('creates a project, activity, and task in the selected project', async () => {
+  const existingPeople = await fetch(`${baseUrl}/api/people`).then((response) => response.json());
+  const projectTeamMember = existingPeople.find((person) => person.employee_code === 'DEMO-RRMS-BA');
+  assert.ok(projectTeamMember);
   const projectResponse = await fetch(`${baseUrl}/api/projects`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ projectCode: 'AUTO-PROJECT', projectName: 'Automated delivery project', projectType: 'Change Major', projectSize: 'Large', startDate: '2026-09-01', targetEndDate: '2026-12-31' })
+    body: JSON.stringify({ projectCode: 'AUTO-PROJECT', projectName: 'Automated delivery project', projectType: 'Change Major', projectSize: 'Large', startDate: '2026-09-01', targetEndDate: '2026-12-31', teamMemberIds: [projectTeamMember.person_id] })
   });
   assert.equal(projectResponse.status, 201);
   const { projectId } = await projectResponse.json();
   const selectedHeaders = { 'content-type': 'application/json', 'x-project-id': projectId };
+
+  const projectPeople = await fetch(`${baseUrl}/api/people`, { headers: selectedHeaders }).then((response) => response.json());
+  const selectedTeamMember = projectPeople.find((person) => person.person_id === projectTeamMember.person_id);
+  assert.equal(selectedTeamMember.is_project_member, 1);
+  assert.equal(selectedTeamMember.project_role, 'TeamMember');
 
   const initialPhases = await fetch(`${baseUrl}/api/phases`, { headers: selectedHeaders }).then((response) => response.json());
   assert.equal(initialPhases.length, 0);

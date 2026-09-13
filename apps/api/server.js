@@ -340,9 +340,12 @@ const projectSizes = new Set(['Small', 'Medium', 'Large']);
 const templatePreviews = new Map();
 const maxTemplateBytes = 5 * 1024 * 1024;
 const retiredProjectRoleNames = new Set(['BA', 'BALead', 'Business Analyst', 'Business Analyst (BA)', 'QA', 'QALead', 'Quality Assurance', 'Quality Assurance (QA)']);
+const legacyProjectRoleMappings = new Map([['DEV', 'DEVLead'], ['Developer', 'DEVLead'], ['Developer (DEV)', 'DEVLead']]);
 
 function normalizeProjectRole(roleCode) {
-  return retiredProjectRoleNames.has(String(roleCode || '').trim()) ? 'TeamMember' : roleCode;
+  const normalized = String(roleCode || '').trim();
+  if (retiredProjectRoleNames.has(normalized)) return 'TeamMember';
+  return legacyProjectRoleMappings.get(normalized) || roleCode;
 }
 
 function isValidProjectRole(roleCode, projectId) {

@@ -197,6 +197,15 @@ test('retires BA and QA roles from project team and assignment options', async (
   const { personId } = await legacyRoleResponse.json();
   const people = await fetch(`${baseUrl}/api/people`).then((result) => result.json());
   assert.equal(people.find((item) => item.person_id === personId).project_role, 'TeamMember');
+
+  const legacyDeveloperResponse = await fetch(`${baseUrl}/api/people`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ employeeCode: 'AUTO-LEGACY-DEV', displayName: 'Legacy Developer Form Value', projectRole: 'Developer (DEV)' })
+  });
+  assert.equal(legacyDeveloperResponse.status, 201);
+  const { personId: developerId } = await legacyDeveloperResponse.json();
+  const refreshedPeople = await fetch(`${baseUrl}/api/people`).then((result) => result.json());
+  assert.equal(refreshedPeople.find((item) => item.person_id === developerId).project_role, 'DEVLead');
 });
 
 test('keeps the task owner in sync when an Owner assignment is created', async () => {

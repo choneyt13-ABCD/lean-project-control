@@ -1304,7 +1304,7 @@ async function workloadView() {
                     <div class="table-wrap">
                       <table class="table">
                         <thead><tr>
-                          <th>CODE</th><th>TASK NAME</th><th>TYPE</th><th>STATUS</th>
+                          <th>CODE</th><th>TASK NAME</th><th>WBS / ACTIVITY</th><th>TYPE</th><th>STATUS</th>
                           <th>RAG</th><th>PROGRESS</th><th>DUE DATE</th><th>ROLE</th><th>BLOCKER</th>
                         </tr></thead>
                         <tbody>
@@ -1315,6 +1315,11 @@ async function workloadView() {
                                 <strong>${t.task_name}</strong>
                                 ${t.workstream ? `<small class="cell-note">${t.workstream}</small>` : ''}
                                 ${t.latest_next_step ? `<small class="cell-note subtle">→ ${t.latest_next_step}</small>` : ''}
+                              </td>
+                              <td>
+                                <span class="type-pill wbs-pill">WBS</span>
+                                <span class="code inline-code">${t.wbs_code || '—'}</span>
+                                <small class="cell-note">${t.wbs_name || 'No activity'}</small>
                               </td>
                               <td>${badge(t.task_type)}</td>
                               <td>${badge(t.status)}</td>

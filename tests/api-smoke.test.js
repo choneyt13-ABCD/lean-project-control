@@ -71,6 +71,7 @@ test('reconciles each member workload with open, completed, and total task count
     assert.equal(member.total_tasks, member.total + member.completed, member.display_name);
     assert.equal(member.tasks.length, member.total, member.display_name);
     assert.ok(member.tasks.every((task) => task.status !== 'Done'), member.display_name);
+    assert.ok(member.tasks.every((task) => task.wbs_code && task.wbs_name), member.display_name);
     for (let index = 1; index < member.tasks.length; index += 1) {
       assert.ok(statusPriority[member.tasks[index - 1].status] <= statusPriority[member.tasks[index].status], member.display_name);
     }

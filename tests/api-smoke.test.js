@@ -188,6 +188,15 @@ test('retires BA and QA roles from project team and assignment options', async (
     body: JSON.stringify({ taskId: task.task_id, personId: person.person_id, assignmentRole: 'QA' })
   });
   assert.equal(response.status, 422);
+
+  const legacyRoleResponse = await fetch(`${baseUrl}/api/people`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ employeeCode: 'AUTO-LEGACY-BA', displayName: 'Legacy BA Form Value', projectRole: 'Business Analyst (BA)' })
+  });
+  assert.equal(legacyRoleResponse.status, 201);
+  const { personId } = await legacyRoleResponse.json();
+  const people = await fetch(`${baseUrl}/api/people`).then((result) => result.json());
+  assert.equal(people.find((item) => item.person_id === personId).project_role, 'TeamMember');
 });
 
 test('keeps the task owner in sync when an Owner assignment is created', async () => {
@@ -885,4 +894,3 @@ test('allows setting an existing organization directory person as task Owner and
   const members = await fetch(`${baseUrl}/api/project-members`).then((res) => res.json());
   assert.ok(members.some((m) => m.person_id === personId));
 });
-

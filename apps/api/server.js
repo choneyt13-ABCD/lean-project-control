@@ -339,6 +339,11 @@ function isValidProjectType(name) {
 const projectSizes = new Set(['Small', 'Medium', 'Large']);
 const templatePreviews = new Map();
 const maxTemplateBytes = 5 * 1024 * 1024;
+const retiredProjectRoleNames = new Set(['BA', 'BALead', 'Business Analyst', 'Business Analyst (BA)', 'QA', 'QALead', 'Quality Assurance', 'Quality Assurance (QA)']);
+
+function normalizeProjectRole(roleCode) {
+  return retiredProjectRoleNames.has(String(roleCode || '').trim()) ? 'TeamMember' : roleCode;
+}
 
 function isValidProjectRole(roleCode, projectId) {
   if (!roleCode) return false;
@@ -1383,7 +1388,7 @@ app.get('/api/project-members', async (request) => db.prepare(`SELECT p.person_i
 app.post('/api/people', async (request, reply) => {
   const body = request.body || {};
   if (!body.employeeCode || !body.displayName) return reply.code(422).send({ message: 'Employee code and display name are required.' });
-  const assignedProjectRole = body.projectRole || 'TeamMember';
+  const assignedProjectRole = normalizeProjectRole(body.projectRole || 'TeamMember');
   if (!isValidProjectRole(assignedProjectRole, request.projectId)) return reply.code(422).send({ message: 'Project role is invalid.' });
   const existingPerson = db.prepare('SELECT * FROM people WHERE employee_code = ? AND deleted_at IS NULL').get(body.employeeCode);
   if (existingPerson) {
@@ -1417,21 +1422,22 @@ app.patch('/api/people/:personId', async (request, reply) => {
   const before = editablePerson(request.params.personId, request.projectId);
   if (!before) return reply.code(404).send({ message: 'Person not found.' });
   const body = request.body || {};
-  if (body.projectRole && !isValidProjectRole(body.projectRole, request.projectId)) return reply.code(422).send({ message: 'Project role is invalid.' });
+  const projectRole = body.projectRole === undefined ? undefined : normalizeProjectRole(body.projectRole);
+  if (projectRole && !isValidProjectRole(projectRole, request.projectId)) return reply.code(422).send({ message: 'Project role is invalid.' });
   if (body.email !== undefined && !body.email) return reply.code(422).send({ message: 'Email cannot be empty.' });
   const fields = { employeeCode: 'employee_code', displayName: 'display_name', email: 'email', department: 'department', positionTitle: 'position_title' };
   const changes = Object.entries(fields).filter(([input]) => body[input] !== undefined);
   if (!changes.length && body.projectRole === undefined) return reply.code(422).send({ message: 'No supported values supplied.' });
-  const after = { ...before, ...Object.fromEntries(changes.map(([input, field]) => [field, body[input]])), project_role: body.projectRole ?? before.project_role };
+  const after = { ...before, ...Object.fromEntries(changes.map(([input, field]) => [field, body[input]])), project_role: projectRole ?? before.project_role };
   try {
     db.transaction(() => {
       if (changes.length) {
         db.prepare(`UPDATE people SET ${changes.map(([, field]) => `${field} = ?`).join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE person_id = ?`)
           .run(...changes.map(([input]) => body[input]), before.person_id);
       }
-      if (body.projectRole !== undefined && before.project_member_id) {
-        db.prepare('UPDATE project_members SET project_role = ?, updated_at = CURRENT_TIMESTAMP WHERE project_member_id = ?').run(body.projectRole, before.project_member_id);
-      } else if (body.projectRole !== undefined) {
+      if (projectRole !== undefined && before.project_member_id) {
+        db.prepare('UPDATE project_members SET project_role = ?, updated_at = CURRENT_TIMESTAMP WHERE project_member_id = ?').run(projectRole, before.project_member_id);
+      } else if (projectRole !== undefined) {
         // The People screen also lists people who exist outside the selected
         // project. Selecting a project role for one of them must create the
         // missing membership; otherwise the person can look like a team member
@@ -1439,13 +1445,13 @@ app.patch('/api/people/:personId', async (request, reply) => {
         const existingMembership = db.prepare('SELECT * FROM project_members WHERE project_id = ? AND person_id = ?').get(request.projectId, before.person_id);
         if (existingMembership) {
           db.prepare('UPDATE project_members SET project_role = ?, deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE project_member_id = ?')
-            .run(body.projectRole, existingMembership.project_member_id);
+            .run(projectRole, existingMembership.project_member_id);
         } else {
           const membershipId = randomUUID();
           db.prepare(`INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm)
-            VALUES (?, ?, ?, ?, 0)`).run(membershipId, request.projectId, before.person_id, body.projectRole);
+            VALUES (?, ?, ?, ?, 0)`).run(membershipId, request.projectId, before.person_id, projectRole);
           audit('project_member.create', 'ProjectMember', membershipId, null,
-            { personId: before.person_id, projectId: request.projectId, projectRole: body.projectRole }, request.actor.person_id);
+          { personId: before.person_id, projectId: request.projectId, projectRole }, request.actor.person_id);
         }
       }
       audit('people.update', 'People', before.person_id, before, after, request.actor.person_id);

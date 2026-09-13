@@ -45,13 +45,36 @@ if (databaseProvider === 'postgres') {
   // Verify connectivity at startup.
   const client = await pgPool.connect();
   client.release();
-  console.info('[db] Connected to PostgreSQL. Existing routes still use SQLite during transition.');
+  console.info('[db] Connected to PostgreSQL. Ensuring Supabase persistence storage tables.');
+
+  // Create table in Supabase PostgreSQL to hold persistent snapshots and uploaded files
+  await pgPool.query(`
+    CREATE TABLE IF NOT EXISTS app_state_storage (
+      key VARCHAR(100) PRIMARY KEY,
+      data BYTEA NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS task_note_attachments (
+      storage_ref VARCHAR(300) PRIMARY KEY,
+      file_data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
 
   // Open/initialize a local SQLite database for existing route handlers
   const fallbackPath = path.resolve(root, 'data/lean-project-control.db');
   fs.mkdirSync(path.dirname(fallbackPath), { recursive: true });
   const seedDbPath = path.resolve(root, 'database/sqlite/lean_seed.db');
-  if (fs.existsSync(seedDbPath)) {
+
+  // Check if Supabase has a persistent snapshot
+  const snapshotRes = await pgPool.query('SELECT data, updated_at FROM app_state_storage WHERE key = $1', ['lean_sqlite_db']);
+  if (snapshotRes.rows.length && snapshotRes.rows[0].data) {
+    fs.writeFileSync(fallbackPath, snapshotRes.rows[0].data);
+    console.info(`[db] Restored persistent database from Supabase PostgreSQL (updated: ${snapshotRes.rows[0].updated_at}).`);
+    db = new Database(fallbackPath);
+    db.pragma('foreign_keys = ON');
+    db.pragma('journal_mode = WAL');
+  } else {
     let needCopy = !fs.existsSync(fallbackPath);
     if (!needCopy) {
       try {
@@ -63,15 +86,26 @@ if (databaseProvider === 'postgres') {
         needCopy = true;
       }
     }
-    if (needCopy) {
+    if (needCopy && fs.existsSync(seedDbPath)) {
       fs.copyFileSync(seedDbPath, fallbackPath);
       console.info('[db] Loaded full database seed (all 5 projects, 108 tasks) into local database.');
     }
+    db = new Database(fallbackPath);
+    db.pragma('foreign_keys = ON');
+    db.pragma('journal_mode = WAL');
+    ensureSqliteInitialized(db);
+    try {
+      const initialBuf = db.serialize();
+      await pgPool.query(`
+        INSERT INTO app_state_storage (key, data, updated_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
+      `, ['lean_sqlite_db', initialBuf]);
+      console.info('[db] Seeded initial database to Supabase persistent storage.');
+    } catch (persistErr) {
+      console.warn('[db] Note on initial Supabase seed persist:', persistErr.message);
+    }
   }
-  db = new Database(fallbackPath);
-  db.pragma('foreign_keys = ON');
-  db.pragma('journal_mode = WAL');
-  ensureSqliteInitialized(db);
 } else {
   // Default: SQLite mode — the original, unchanged path.
   if (!databaseUrl.startsWith('file:')) {
@@ -443,11 +477,38 @@ function resolveActor(loginName) {
   return { ...account, roles, memberships };
 }
 
+let persistTimer = null;
+export async function persistToSupabase() {
+  if (!pgPool || !db) return;
+  try {
+    const data = db.serialize();
+    await pgPool.query(`
+      INSERT INTO app_state_storage (key, data, updated_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
+    `, ['lean_sqlite_db', data]);
+  } catch (err) {
+    console.error('[db] Error persisting snapshot to Supabase:', err.message);
+  }
+}
+
+export function queuePersistToSupabase() {
+  if (!pgPool) return;
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistToSupabase().catch(() => {});
+  }, 1000);
+}
+
 function audit(action, entityType, entityId, before, after, actorPersonId = demoPmId) {
   db.prepare(`INSERT INTO audit_logs (audit_log_id, actor_person_id, action, entity_type, entity_id, before_snapshot, after_snapshot)
     VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .run(randomUUID(), actorPersonId, action, entityType, entityId, before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null);
+  if (pgPool) {
+    queuePersistToSupabase();
+  }
 }
+
 
 function nextAvailableTaskCode(projectId, requestedCode) {
   const used = db.prepare('SELECT 1 FROM tasks WHERE project_id = ? AND task_code = ?').get(projectId, requestedCode);
@@ -1774,6 +1835,13 @@ app.put('/api/task-notes/:noteId/files', async (request, reply) => {
     db.prepare(`INSERT INTO task_note_files (task_note_file_id, task_note_id, original_file_name, file_type, file_size_bytes, storage_ref, uploaded_by_person_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, note.task_note_id, originalFileName, fileType, request.body.length, storageRef, request.actor.person_id);
     audit('task_note_file.create', 'TaskNoteFile', id, null, { taskNoteId: note.task_note_id, originalFileName, fileSizeBytes: request.body.length }, request.actor.person_id);
+    if (pgPool) {
+      pgPool.query(`
+        INSERT INTO task_note_attachments (storage_ref, file_data, created_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (storage_ref) DO UPDATE SET file_data = EXCLUDED.file_data
+      `, [storageRef, request.body]).catch((err) => console.warn('[db] Note on attachment persist:', err.message));
+    }
   } catch (error) {
     fs.unlinkSync(path.join(taskNoteUploadDirectory, storageRef));
     throw error;
@@ -1787,6 +1855,17 @@ app.get('/api/task-note-files/:fileId/download', async (request, reply) => {
       AND f.deleted_at IS NULL AND n.deleted_at IS NULL AND t.deleted_at IS NULL`).get(request.params.fileId, request.projectId);
   if (!file) return reply.code(404).send({ message: 'Attachment not found.' });
   const target = path.join(taskNoteUploadDirectory, file.storage_ref);
+  if (!fs.existsSync(target) && pgPool) {
+    try {
+      const fileRes = await pgPool.query('SELECT file_data FROM task_note_attachments WHERE storage_ref = $1', [file.storage_ref]);
+      if (fileRes.rows.length && fileRes.rows[0].file_data) {
+        fs.mkdirSync(taskNoteUploadDirectory, { recursive: true });
+        fs.writeFileSync(target, fileRes.rows[0].file_data);
+      }
+    } catch (fetchErr) {
+      console.warn('[db] Note on attachment restore:', fetchErr.message);
+    }
+  }
   if (!fs.existsSync(target)) return reply.code(404).send({ message: 'Attachment file is no longer available.' });
   reply.header('Content-Disposition', `attachment; filename="${safeFileName(file.original_file_name)}"`);
   reply.type(file.file_type || 'application/octet-stream');
@@ -2151,9 +2230,32 @@ app.register(fastifyStatic, {
   }
 });
 app.setErrorHandler((error, request, reply) => { request.log.error(error); reply.code(500).send({ message: 'Something went wrong while saving the demo data.' }); });
+
+app.addHook('onResponse', async (request, reply) => {
+  if (pgPool && request.method !== 'GET' && reply.statusCode < 400) {
+    queuePersistToSupabase();
+  }
+});
+
 app.addHook('onClose', async () => {
+  if (pgPool) await persistToSupabase().catch(() => {});
   db.close();
   if (pgPool) await pgPool.end();
+});
+
+const gracefulShutdown = async () => {
+  if (pgPool) {
+    await persistToSupabase().catch(() => {});
+    await pgPool.end().catch(() => {});
+  }
+};
+process.on('SIGTERM', async () => {
+  await gracefulShutdown();
+  process.exit(0);
+});
+process.on('SIGINT', async () => {
+  await gracefulShutdown();
+  process.exit(0);
 });
 
 // HOST defaults to 127.0.0.1 (local-only) so the server is safe out of the box.

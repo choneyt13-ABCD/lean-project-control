@@ -340,7 +340,14 @@ const projectSizes = new Set(['Small', 'Medium', 'Large']);
 const templatePreviews = new Map();
 const maxTemplateBytes = 5 * 1024 * 1024;
 const retiredProjectRoleNames = new Set(['BA', 'BALead', 'Business Analyst', 'Business Analyst (BA)', 'QA', 'QALead', 'Quality Assurance', 'Quality Assurance (QA)']);
-const legacyProjectRoleMappings = new Map([['DEV', 'DEVLead'], ['Developer', 'DEVLead'], ['Developer (DEV)', 'DEVLead']]);
+const legacyProjectRoleMappings = new Map([
+  ['PM', 'PM'], ['Project Manager', 'PM'], ['Project Manager (PM)', 'PM'],
+  ['ProjectAdmin', 'ProjectAdmin'], ['Project Admin', 'ProjectAdmin'], ['Project Admin (ProjectAdmin)', 'ProjectAdmin'],
+  ['DEV', 'DEVLead'], ['Developer', 'DEVLead'], ['Developer (DEV)', 'DEVLead'], ['DEV Lead', 'DEVLead'], ['DEV Lead (DEVLead)', 'DEVLead'],
+  ['TeamMember', 'TeamMember'], ['Team Member', 'TeamMember'], ['Team Member (TeamMember)', 'TeamMember'],
+  ['Reviewer', 'Reviewer'], ['Reviewer (Reviewer)', 'Reviewer'],
+  ['Owner', 'Owner'], ['Owner (Owner)', 'Owner']
+]);
 
 function normalizeProjectRole(roleCode) {
   const normalized = String(roleCode || '').trim();

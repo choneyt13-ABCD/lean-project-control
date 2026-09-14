@@ -17,7 +17,9 @@ The repository is a working single-user feasibility walkthrough. It is suitable 
 - Atomic creation of a mock person and their RRMS project membership from the Admin workflow.
 - Local request identity resolution from active `user_accounts`, exposed through `/api/session`.
 - Request-actor ownership and Audit Log attribution instead of hard-coded mutation actors.
-- Optional demo identity override guarded by an explicit environment flag for local tests only.
+- Project-scoped Workload (`/api/workload`) summarizing capacity, status, due dates, and blockers for the active project.
+- Portfolio-level All Projects Workload (`/api/workload/all-projects`) aggregating cross-project member capacity, person-project matrix, and task drill-down.
+- All Projects workload visibility is currently a local feasibility behavior for walkthrough and planning; RBAC and portfolio-level visibility rules will be enforced in a subsequent step.
 - Isolated API smoke tests that do not modify the local demo database.
 
 ## Remaining Before a Shared Pilot

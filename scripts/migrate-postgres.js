@@ -24,7 +24,11 @@ if (!databaseUrl || (!databaseUrl.startsWith('postgres://') && !databaseUrl.star
   process.exit(1);
 }
 
-const pool = new pg.Pool({ connectionString: databaseUrl });
+const isCloudPg = !databaseUrl.includes('localhost') && !databaseUrl.includes('127.0.0.1');
+const pool = new pg.Pool({
+  connectionString: databaseUrl,
+  ...(isCloudPg ? { ssl: { rejectUnauthorized: false } } : {})
+});
 
 async function run() {
   const client = await pool.connect();

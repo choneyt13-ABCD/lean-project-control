@@ -38,7 +38,7 @@ test.after(async () => {
 });
 
 test('serves the walkthrough and all read endpoints', async () => {
-  const paths = ['/', '/api/session', '/api/portfolio', '/api/project', '/api/dashboard', '/api/master-control?weekStart=2026-08-31', '/api/tasks', '/api/wbs', '/api/people', '/api/project-members', '/api/assignments', '/api/weekly-plans?weekStart=2026-08-31', '/api/role-updates?weekStart=2026-08-31', '/api/weekly-updates', '/api/raid', '/api/audit'];
+  const paths = ['/', '/api/session', '/api/portfolio', '/api/project', '/api/dashboard', '/api/master-control?weekStart=2026-08-31', '/api/tasks', '/api/wbs', '/api/people', '/api/project-members', '/api/assignments', '/api/weekly-plans?weekStart=2026-08-31', '/api/role-updates?weekStart=2026-08-31', '/api/weekly-updates', '/api/raid', '/api/audit', '/api/workload/all-projects'];
   for (const endpoint of paths) {
     const response = await fetch(`${baseUrl}${endpoint}`);
     assert.equal(response.status, 200, endpoint);
@@ -921,3 +921,220 @@ test('allows setting an existing organization directory person as task Owner and
   const members = await fetch(`${baseUrl}/api/project-members`).then((res) => res.json());
   assert.ok(members.some((m) => m.person_id === personId));
 });
+
+test('All Projects Workload: combines people and tasks across multiple projects without double counting', async () => {
+  const allWorkload = await fetch(`${baseUrl}/api/workload/all-projects`).then((res) => res.json());
+
+  // 1. Structure
+  assert.ok(allWorkload.reportDate, 'Must have reportDate');
+  assert.ok(allWorkload.weekEndDate, 'Must have weekEndDate');
+  assert.ok(allWorkload.overallSummary, 'Must have overallSummary');
+  assert.ok(Array.isArray(allWorkload.peopleAggregates), 'Must have peopleAggregates');
+  assert.ok(Array.isArray(allWorkload.projectAggregates), 'Must have projectAggregates');
+  assert.ok(Array.isArray(allWorkload.personProjectAggregates), 'Must have personProjectAggregates');
+  assert.ok(Array.isArray(allWorkload.taskDetailRecords), 'Must have taskDetailRecords');
+
+  // Rule 1: รวมบุคลากรจากหลาย Project เป็นคนเดียว
+  const personIds = allWorkload.peopleAggregates.map((p) => p.personId);
+  const uniquePersonIds = new Set(personIds);
+  assert.equal(personIds.length, uniquePersonIds.size, 'Each person must appear only once in peopleAggregates');
+
+  // PM exists in both RRMS and DTP projects
+  const pm = allWorkload.peopleAggregates.find((p) => p.displayName === 'RRMS Demo PM');
+  assert.ok(pm, 'PM should be in peopleAggregates');
+  assert.ok(pm.projectCount >= 2, 'PM should have tasks in multiple projects');
+
+  // Rule 2: รวม Task จากหลาย Project ของบุคคลเดียวกัน
+  const pmPersonProjects = allWorkload.personProjectAggregates.filter((pp) => pp.personId === pm.personId);
+  assert.ok(pmPersonProjects.length >= 2, 'PM should have entries across multiple projects');
+  const sumPmProjectsOpen = pmPersonProjects.reduce((sum, pp) => sum + pp.totalOpen, 0);
+  assert.equal(pm.totalOpen, sumPmProjectsOpen, 'Person totalOpen must equal sum of open tasks across projects');
+
+  // Rule 3: Task เดียวกันที่บุคคลเป็นทั้ง Owner และ Assignee ต้องไม่นับซ้ำ
+  const pmTasks = allWorkload.taskDetailRecords.filter((t) => t.personId === pm.personId);
+  const pmTaskIds = pmTasks.map((t) => t.taskId);
+  assert.equal(pmTaskIds.length, new Set(pmTaskIds).size, 'No duplicate tasks for the same person');
+  const dualRoleTask = pmTasks.find((t) => t.isOwner && t.isAssignee);
+  assert.ok(dualRoleTask, 'Task with both owner and assignee should exist');
+  assert.equal(pmTasks.filter((t) => t.taskId === dualRoleTask.taskId).length, 1, 'Dual role task must only be counted once');
+
+  // Rule 5: ไม่รวม Done ในค่าเริ่มต้น
+  assert.equal(allWorkload.includeDone, false, 'Default includeDone should be false');
+  assert.ok(allWorkload.taskDetailRecords.every((t) => t.status !== 'Done'), 'Default taskDetailRecords must not include Done tasks');
+
+  // Rule 9: Project aggregate รวมตรงกับ Person × Project Matrix
+  for (const proj of allWorkload.projectAggregates) {
+    const matrixColSum = allWorkload.personProjectAggregates
+      .filter((pp) => pp.projectId === proj.projectId)
+      .reduce((sum, pp) => sum + pp.totalOpen, 0);
+    assert.equal(proj.totalOpen, matrixColSum, `Project ${proj.projectCode} totalOpen must match matrix column sum`);
+  }
+
+  // Rule 10: Endpoint /api/workload เดิมยังทำงานและยัง Scope ตาม Active Project
+  const scopedWorkload = await fetch(`${baseUrl}/api/workload`).then((res) => res.json());
+  assert.ok(scopedWorkload.members.length > 0, 'Original /api/workload must return members');
+  for (const m of scopedWorkload.members) {
+    for (const t of m.tasks) {
+      assert.ok(t.task_code.startsWith('RRMS-'), 'Original /api/workload tasks must remain scoped to RRMS');
+    }
+  }
+});
+
+test('All Projects Workload: includeDone, overdue/due-this-week, latest blocker, and soft delete', async () => {
+  // Rule 6: Include Done ทำงานถูกต้อง
+  const doneWorkload = await fetch(`${baseUrl}/api/workload/all-projects?includeDone=true`).then((res) => res.json());
+  assert.equal(doneWorkload.includeDone, true);
+  assert.ok(doneWorkload.taskDetailRecords.some((t) => t.status === 'Done'), 'Should include Done tasks when includeDone=true');
+  assert.ok(doneWorkload.overallSummary.completed > 0, 'Should report completed tasks in summary');
+  assert.equal(doneWorkload.overallSummary.totalTasks, doneWorkload.overallSummary.totalOpen + doneWorkload.overallSummary.completed);
+
+  // Rule 7: คำนวณ Overdue และ Due this week ถูกต้อง
+  const today = doneWorkload.reportDate;
+  const weekEnd = doneWorkload.weekEndDate;
+  for (const t of doneWorkload.taskDetailRecords) {
+    if (t.plannedDueDate && t.plannedDueDate < today && t.status !== 'Done') {
+      assert.equal(t.isOverdue, true, `Task ${t.taskCode} due ${t.plannedDueDate} should be overdue today ${today}`);
+    }
+    if (t.plannedDueDate && t.plannedDueDate >= today && t.plannedDueDate <= weekEnd && t.status !== 'Done') {
+      assert.equal(t.isDueThisWeek, true, `Task ${t.taskCode} due ${t.plannedDueDate} should be due this week`);
+    }
+  }
+
+  // Rule 8: ดึง Blocker ล่าสุดถูกต้อง
+  const tasks = await fetch(`${baseUrl}/api/tasks`).then((res) => res.json());
+  const testTask = tasks[0];
+
+  await fetch(`${baseUrl}/api/weekly-updates`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      taskId: testTask.task_id,
+      weekStartDate: '2026-08-17',
+      progress: 30,
+      status: 'InProgress',
+      ragStatus: 'Amber',
+      summary: 'Week 1 update',
+      blocker: 'First early blocker'
+    })
+  });
+
+  await fetch(`${baseUrl}/api/weekly-updates`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      taskId: testTask.task_id,
+      weekStartDate: '2026-08-24',
+      progress: 40,
+      status: 'Blocked',
+      ragStatus: 'Red',
+      summary: 'Week 2 update',
+      blocker: 'Latest critical blocker'
+    })
+  });
+
+  const updatedWorkload = await fetch(`${baseUrl}/api/workload/all-projects?includeDone=true`).then((res) => res.json());
+  const taskInWorkload = updatedWorkload.taskDetailRecords.find((t) => t.taskId === testTask.task_id);
+  assert.ok(taskInWorkload, 'Task should be in workload');
+  assert.equal(taskInWorkload.latestBlocker, 'Latest critical blocker', 'Must reflect the latest blocker from the newest weekly update');
+
+  // Rule 4: ไม่รวม Task หรือ Project ที่ถูก soft delete
+  const wbs = await fetch(`${baseUrl}/api/wbs`).then((res) => res.json());
+  const createTaskRes = await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      wbsItemId: wbs[0].wbs_item_id,
+      taskCode: 'TEST-SOFT-DEL-01',
+      taskName: 'Soft delete test task',
+      taskType: 'MainTask',
+      weight: 10
+    })
+  });
+  assert.equal(createTaskRes.status, 201);
+  const createdTask = await createTaskRes.json();
+
+  const beforeDelete = await fetch(`${baseUrl}/api/workload/all-projects`).then((res) => res.json());
+  assert.ok(beforeDelete.taskDetailRecords.some((t) => t.taskId === createdTask.taskId));
+
+  const deleteRes = await fetch(`${baseUrl}/api/tasks/${createdTask.taskId}`, { method: 'DELETE' });
+  assert.equal(deleteRes.status, 204);
+
+  const afterDelete = await fetch(`${baseUrl}/api/workload/all-projects`).then((res) => res.json());
+  assert.ok(!afterDelete.taskDetailRecords.some((t) => t.taskId === createdTask.taskId), 'Soft-deleted task must not appear in all-projects workload');
+});
+
+test('serves updated UI assets and contracts for All Projects Workload', async () => {
+  const cssRes = await fetch(`${baseUrl}/workload-controls.css`);
+  assert.equal(cssRes.status, 200);
+  const cssText = await cssRes.text();
+  assert.ok(cssText.includes('.all-workload-hero'));
+  assert.ok(cssText.includes('.matrix-table'));
+  assert.ok(cssText.includes('.drilldown-panel'));
+
+  const appRes = await fetch(`${baseUrl}/app.js`);
+  assert.equal(appRes.status, 200);
+  const appText = await appRes.text();
+  assert.ok(appText.includes('allProjectsWorkloadView'));
+  assert.ok(appText.includes('All Projects Workload'));
+});
+
+test('All Projects Workload: interaction contracts, grouping, and multi-filter calculation', async () => {
+  const data = await fetch(`${baseUrl}/api/workload/all-projects?includeDone=true`).then((r) => r.json());
+  const tasks = data.taskDetailRecords;
+
+  // Filter by status InProgress
+  const inProgressTasks = tasks.filter((t) => t.status === 'InProgress');
+  assert.ok(inProgressTasks.length > 0);
+
+  // Filter by RAG Red
+  const redTasks = tasks.filter((t) => t.ragStatus === 'Red');
+  assert.ok(redTasks.length > 0);
+
+  // Filter by Overdue
+  const overdueTasks = tasks.filter((t) => t.isOverdue);
+  assert.ok(Array.isArray(overdueTasks));
+
+  // Filter by relationship
+  const ownerOnlyTasks = tasks.filter((t) => t.isOwner);
+  const assigneeOnlyTasks = tasks.filter((t) => t.isAssignee);
+  assert.ok(ownerOnlyTasks.length > 0);
+  assert.ok(assigneeOnlyTasks.length > 0);
+
+  // Group by project
+  const projectGroups = new Map();
+  tasks.forEach((t) => {
+    if (!projectGroups.has(t.projectId)) projectGroups.set(t.projectId, []);
+    projectGroups.get(t.projectId).push(t);
+  });
+  assert.ok(projectGroups.size >= 2, 'Should group tasks across multiple projects');
+  for (const [pId, group] of projectGroups.entries()) {
+    assert.ok(group.every((t) => t.projectId === pId));
+  }
+
+  // Group by WBS / Activity
+  const wbsGroups = new Map();
+  tasks.forEach((t) => {
+    const key = `${t.projectId}:${t.wbsId}`;
+    if (!wbsGroups.has(key)) wbsGroups.set(key, []);
+    wbsGroups.get(key).push(t);
+  });
+  assert.ok(wbsGroups.size >= 2, 'Should group tasks by WBS / Activity');
+
+  // Verify sort ordering: default risk sorts Blocked -> Overdue -> Red RAG -> Total open
+  const people = [...data.peopleAggregates];
+  people.sort((a, b) => (b.blocked - a.blocked) || (b.overdue - a.overdue) || (b.ragRed - a.ragRed) || (b.totalOpen - a.totalOpen));
+  for (let i = 1; i < people.length; i++) {
+    const prev = people[i - 1];
+    const curr = people[i];
+    if (prev.blocked !== curr.blocked) {
+      assert.ok(prev.blocked >= curr.blocked);
+    } else if (prev.overdue !== curr.overdue) {
+      assert.ok(prev.overdue >= curr.overdue);
+    } else if (prev.ragRed !== curr.ragRed) {
+      assert.ok(prev.ragRed >= curr.ragRed);
+    }
+  }
+});
+
+
+

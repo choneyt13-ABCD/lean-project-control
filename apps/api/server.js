@@ -41,7 +41,13 @@ if (databaseProvider === 'postgres') {
   }
   // Lazy-import pg so the package is only required when actually needed.
   const { default: pg } = await import('pg');
-  pgPool = new pg.Pool({ connectionString: databaseUrl, max: 10, idleTimeoutMillis: 30000 });
+  const isCloudPg = !databaseUrl.includes('localhost') && !databaseUrl.includes('127.0.0.1');
+  pgPool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    ...(isCloudPg ? { ssl: { rejectUnauthorized: false } } : {})
+  });
   // Verify connectivity at startup.
   const client = await pgPool.connect();
   client.release();
@@ -833,6 +839,12 @@ app.addHook('preHandler', async (request, reply) => {
   const actor = resolveActor(loginName);
   if (!actor) return reply.code(401).send({ message: 'No active local demo account matches the configured login.' });
   request.actor = actor;
+  const urlPath = request.url.split('?')[0].replace(/\/$/, '');
+  if (urlPath === '/api/workload/all-projects') {
+    // TODO(rbac): Add portfolio/global visibility authorization once RBAC is implemented.
+    // In current local feasibility walkthrough, any authenticated actor can view all projects workload.
+    return;
+  }
   const requestedProjectId = typeof request.headers['x-project-id'] === 'string' ? request.headers['x-project-id'] : defaultProjectId;
   const hasProjectAccess = db.prepare(`SELECT 1 FROM project_members WHERE project_id = ? AND person_id = ? AND deleted_at IS NULL
     AND (active_from IS NULL OR active_from <= date('now')) AND (active_to IS NULL OR active_to >= date('now'))`).get(requestedProjectId, actor.person_id);
@@ -1589,6 +1601,471 @@ app.get('/api/workload', async (request) => {
   });
 
   return { today, weekEnd: weekEndStr, members: result };
+});
+
+// ── All Projects Workload View (Portfolio Level) ──────────────────────────────
+app.get('/api/workload/all-projects', async (request) => {
+  // TODO(rbac): Add portfolio/global visibility authorization once RBAC is implemented.
+  // In current local feasibility walkthrough, any authenticated actor can view this portfolio report.
+
+  const today = new Date().toISOString().slice(0, 10);
+  const weekEnd = new Date(new Date(today));
+  weekEnd.setDate(weekEnd.getDate() + (6 - ((weekEnd.getDay() + 6) % 7)));
+  const weekEndStr = weekEnd.toISOString().slice(0, 10);
+
+  const queryParams = request.query || {};
+  const includeDone = queryParams.includeDone === 'true' || queryParams.includeDone === '1' || queryParams.includeDone === true;
+
+  // 1. Fetch active projects
+  const projects = db.prepare(`
+    SELECT p.project_id, p.project_code, p.project_name, p.portfolio_name, p.project_status, p.rag_status,
+      p.main_pm_person_id, owner.display_name AS main_pm_name
+    FROM projects p
+    LEFT JOIN people owner ON owner.person_id = p.main_pm_person_id
+    WHERE p.deleted_at IS NULL
+      AND lower(COALESCE(p.project_status, '')) NOT IN ('cancel', 'cancelled')
+    ORDER BY p.project_code
+  `).all();
+
+  // 2. Fetch People Master
+  const allPeople = db.prepare(`
+    SELECT person_id, display_name, employee_code, department, position_title
+    FROM people
+    WHERE deleted_at IS NULL
+    ORDER BY display_name
+  `).all();
+
+  // 3. Fetch Active Project Members
+  const projectMembers = db.prepare(`
+    SELECT pm.project_member_id, pm.project_id, pm.person_id, pm.project_role, pm.is_main_pm
+    FROM project_members pm
+    JOIN projects p ON p.project_id = pm.project_id
+    WHERE pm.deleted_at IS NULL
+      AND p.deleted_at IS NULL
+      AND lower(COALESCE(p.project_status, '')) NOT IN ('cancel', 'cancelled')
+      AND (pm.active_from IS NULL OR pm.active_from <= date('now'))
+      AND (pm.active_to IS NULL OR pm.active_to >= date('now'))
+  `).all();
+
+  // 4. Fetch Tasks in active projects
+  const tasks = db.prepare(`
+    SELECT t.task_id, t.project_id, t.task_code, t.task_name, t.task_type, t.status, t.rag_status,
+      t.progress, t.planned_start_date, t.planned_due_date, t.workstream,
+      t.owner_person_id,
+      w.wbs_item_id AS wbs_id, w.wbs_code, w.wbs_name,
+      ph.phase_id, ph.phase_code, ph.phase_name,
+      p.project_code, p.project_name,
+      owner.display_name AS owner_name
+    FROM tasks t
+    JOIN projects p ON p.project_id = t.project_id
+    JOIN wbs_items w ON w.wbs_item_id = t.wbs_item_id
+    LEFT JOIN project_phases ph ON ph.phase_id = w.phase_id AND ph.deleted_at IS NULL
+    JOIN people owner ON owner.person_id = t.owner_person_id
+    WHERE t.deleted_at IS NULL
+      AND p.deleted_at IS NULL
+      AND lower(COALESCE(p.project_status, '')) NOT IN ('cancel', 'cancelled')
+    ORDER BY p.project_code, t.planned_due_date ASC, t.task_code
+  `).all();
+
+  // 5. Fetch Task Assignments in active projects
+  const taskAssignments = db.prepare(`
+    SELECT ta.task_id, ta.person_id, ta.assignment_role, ta.raci_role, ta.is_primary,
+      p.display_name AS person_name
+    FROM task_assignments ta
+    JOIN tasks t ON t.task_id = ta.task_id
+    JOIN projects pr ON pr.project_id = t.project_id
+    JOIN people p ON p.person_id = ta.person_id
+    WHERE ta.deleted_at IS NULL
+      AND t.deleted_at IS NULL
+      AND pr.deleted_at IS NULL
+      AND lower(COALESCE(pr.project_status, '')) NOT IN ('cancel', 'cancelled')
+  `).all();
+
+  // 6. Fetch Weekly Updates for Blocker and Next Step
+  const weeklyUpdates = db.prepare(`
+    SELECT wu.task_id, wu.blocker, wu.next_step, wu.week_start_date, wu.created_at
+    FROM weekly_updates wu
+    JOIN tasks t ON t.task_id = wu.task_id
+    JOIN projects pr ON pr.project_id = t.project_id
+    WHERE wu.deleted_at IS NULL
+      AND t.deleted_at IS NULL
+      AND pr.deleted_at IS NULL
+      AND lower(COALESCE(pr.project_status, '')) NOT IN ('cancel', 'cancelled')
+      AND ((wu.blocker IS NOT NULL AND trim(wu.blocker) != '') OR (wu.next_step IS NOT NULL AND trim(wu.next_step) != ''))
+    ORDER BY wu.week_start_date ASC, wu.created_at ASC
+  `).all();
+
+  const latestBlockerMap = new Map();
+  const latestNextStepMap = new Map();
+  for (const wu of weeklyUpdates) {
+    if (wu.blocker && wu.blocker.trim()) {
+      latestBlockerMap.set(wu.task_id, wu.blocker.trim());
+    }
+    if (wu.next_step && wu.next_step.trim()) {
+      latestNextStepMap.set(wu.task_id, wu.next_step.trim());
+    }
+  }
+
+  // Index assignments by task_id and person_id
+  const assignmentsByTaskPerson = new Map();
+  const assignmentsByPerson = new Map();
+  for (const a of taskAssignments) {
+    const key = `${a.task_id}:${a.person_id}`;
+    if (!assignmentsByTaskPerson.has(key) || a.is_primary) {
+      assignmentsByTaskPerson.set(key, a);
+    }
+    if (!assignmentsByPerson.has(a.person_id)) assignmentsByPerson.set(a.person_id, []);
+    assignmentsByPerson.get(a.person_id).push(a);
+  }
+
+  // Qualifying people:
+  // Non-deleted people who are:
+  // - Active Project Member (in any active project)
+  // - OR Owner of any task in an active project
+  // - OR has an active assignment in an active project
+  const activeMemberPersonIds = new Set(projectMembers.map((pm) => pm.person_id));
+  const taskOwnerPersonIds = new Set(tasks.map((t) => t.owner_person_id));
+  const assignedPersonIds = new Set(taskAssignments.map((ta) => ta.person_id));
+  const qualifyingPersonIds = new Set([
+    ...activeMemberPersonIds,
+    ...taskOwnerPersonIds,
+    ...assignedPersonIds
+  ]);
+
+  const qualifyingPeople = allPeople.filter((p) => qualifyingPersonIds.has(p.person_id));
+
+  // Determine tasks for each qualifying person:
+  // Task belongs to person if t.owner_person_id === person.person_id OR assigned in task_assignments.
+  // Counted only once per person even if both owner and assignee!
+  const taskMap = new Map(tasks.map((t) => [t.task_id, t]));
+  const personTaskIdsMap = new Map();
+  for (const p of qualifyingPeople) {
+    personTaskIdsMap.set(p.person_id, new Set());
+  }
+  for (const t of tasks) {
+    if (personTaskIdsMap.has(t.owner_person_id)) {
+      personTaskIdsMap.get(t.owner_person_id).add(t.task_id);
+    }
+  }
+  for (const a of taskAssignments) {
+    if (personTaskIdsMap.has(a.person_id)) {
+      personTaskIdsMap.get(a.person_id).add(a.task_id);
+    }
+  }
+
+  const allDetailRecords = [];
+  const peopleAggregates = [];
+  const personProjectMap = new Map();
+
+  for (const person of qualifyingPeople) {
+    const pTaskIds = personTaskIdsMap.get(person.person_id) || new Set();
+    const pTasks = [...pTaskIds].map((id) => taskMap.get(id)).filter(Boolean);
+
+    const personProjectsSet = new Set();
+    let pTotalOpen = 0;
+    let pCompleted = 0;
+    let pInProgress = 0;
+    let pNotStarted = 0;
+    let pBlocked = 0;
+    let pOnHold = 0;
+    let pOverdue = 0;
+    let pDueThisWeek = 0;
+    let pRagRed = 0;
+    let pRagAmber = 0;
+    let pRagGreen = 0;
+
+    for (const t of pTasks) {
+      personProjectsSet.add(t.project_id);
+      const isOwner = t.owner_person_id === person.person_id;
+      const assignment = assignmentsByTaskPerson.get(`${t.task_id}:${person.person_id}`);
+      const isAssignee = Boolean(assignment);
+      const assignmentRole = assignment?.assignment_role || (isOwner ? 'Owner' : 'TeamMember');
+      const isDone = t.status === 'Done';
+      const isOverdue = Boolean(t.planned_due_date && t.planned_due_date < today && !isDone);
+      const isDueThisWeek = Boolean(t.planned_due_date && t.planned_due_date >= today && t.planned_due_date <= weekEndStr && !isDone);
+
+      if (isDone) {
+        pCompleted += 1;
+      } else {
+        pTotalOpen += 1;
+        if (t.status === 'InProgress') pInProgress += 1;
+        else if (t.status === 'NotStarted') pNotStarted += 1;
+        else if (t.status === 'Blocked') pBlocked += 1;
+        else if (t.status === 'OnHold') pOnHold += 1;
+
+        if (isOverdue) pOverdue += 1;
+        if (isDueThisWeek) pDueThisWeek += 1;
+        if (t.rag_status === 'Red') pRagRed += 1;
+        else if (t.rag_status === 'Amber') pRagAmber += 1;
+        else if (t.rag_status === 'Green') pRagGreen += 1;
+      }
+
+      const ppKey = `${person.person_id}:${t.project_id}`;
+      if (!personProjectMap.has(ppKey)) {
+        personProjectMap.set(ppKey, {
+          personId: person.person_id,
+          personName: person.display_name,
+          projectId: t.project_id,
+          projectCode: t.project_code,
+          projectName: t.project_name,
+          totalOpen: 0,
+          completed: 0,
+          totalTasks: 0,
+          inProgress: 0,
+          notStarted: 0,
+          blocked: 0,
+          onHold: 0,
+          overdue: 0,
+          dueThisWeek: 0,
+          ragRed: 0,
+          ragAmber: 0,
+          ragGreen: 0,
+          progressSum: 0,
+          tasks: []
+        });
+      }
+      const pp = personProjectMap.get(ppKey);
+      pp.totalTasks += 1;
+      pp.progressSum += (t.progress || 0);
+      if (isDone) {
+        pp.completed += 1;
+      } else {
+        pp.totalOpen += 1;
+        if (t.status === 'InProgress') pp.inProgress += 1;
+        else if (t.status === 'NotStarted') pp.notStarted += 1;
+        else if (t.status === 'Blocked') pp.blocked += 1;
+        else if (t.status === 'OnHold') pp.onHold += 1;
+        if (isOverdue) pp.overdue += 1;
+        if (isDueThisWeek) pp.dueThisWeek += 1;
+        if (t.rag_status === 'Red') pp.ragRed += 1;
+        else if (t.rag_status === 'Amber') pp.ragAmber += 1;
+        else if (t.rag_status === 'Green') pp.ragGreen += 1;
+      }
+
+      const detail = {
+        projectId: t.project_id,
+        project_id: t.project_id,
+        projectCode: t.project_code,
+        project_code: t.project_code,
+        projectName: t.project_name,
+        project_name: t.project_name,
+        personId: person.person_id,
+        person_id: person.person_id,
+        personName: person.display_name,
+        person_name: person.display_name,
+        taskId: t.task_id,
+        task_id: t.task_id,
+        taskCode: t.task_code,
+        task_code: t.task_code,
+        taskName: t.task_name,
+        task_name: t.task_name,
+        taskType: t.task_type,
+        task_type: t.task_type,
+        status: t.status,
+        ragStatus: t.rag_status,
+        rag_status: t.rag_status,
+        progress: t.progress || 0,
+        plannedDueDate: t.planned_due_date || null,
+        planned_due_date: t.planned_due_date || null,
+        plannedStartDate: t.planned_start_date || null,
+        planned_start_date: t.planned_start_date || null,
+        workstream: t.workstream || null,
+        wbsId: t.wbs_id,
+        wbs_id: t.wbs_id,
+        wbsCode: t.wbs_code,
+        wbs_code: t.wbs_code,
+        wbsName: t.wbs_name,
+        wbs_name: t.wbs_name,
+        assignmentRole,
+        assignment_role: assignmentRole,
+        isOwner,
+        is_owner: isOwner,
+        isAssignee,
+        is_assignee: isAssignee,
+        isOverdue,
+        is_overdue: isOverdue,
+        isDueThisWeek,
+        is_due_this_week: isDueThisWeek,
+        latestBlocker: latestBlockerMap.get(t.task_id) || null,
+        latest_blocker: latestBlockerMap.get(t.task_id) || null,
+        latestNextStep: latestNextStepMap.get(t.task_id) || null,
+        latest_next_step: latestNextStepMap.get(t.task_id) || null
+      };
+      pp.tasks.push(detail);
+
+      if (includeDone || !isDone) {
+        allDetailRecords.push(detail);
+      }
+    }
+
+    const evaluatedTasks = includeDone ? pTasks : pTasks.filter((t) => t.status !== 'Done');
+    const pAvgProgress = evaluatedTasks.length
+      ? Math.round(evaluatedTasks.reduce((s, t) => s + (t.progress || 0), 0) / evaluatedTasks.length)
+      : 0;
+
+    peopleAggregates.push({
+      personId: person.person_id,
+      person_id: person.person_id,
+      displayName: person.display_name,
+      display_name: person.display_name,
+      personName: person.display_name,
+      person_name: person.display_name,
+      employeeCode: person.employee_code,
+      employee_code: person.employee_code,
+      department: person.department,
+      positionTitle: person.position_title,
+      position_title: person.position_title,
+      totalOpen: pTotalOpen,
+      total: pTotalOpen,
+      completed: pCompleted,
+      totalTasks: pTasks.length,
+      total_tasks: pTasks.length,
+      inProgress: pInProgress,
+      in_progress: pInProgress,
+      notStarted: pNotStarted,
+      not_started: pNotStarted,
+      blocked: pBlocked,
+      onHold: pOnHold,
+      on_hold: pOnHold,
+      overdue: pOverdue,
+      dueThisWeek: pDueThisWeek,
+      due_this_week: pDueThisWeek,
+      ragRed: pRagRed,
+      rag_red: pRagRed,
+      ragAmber: pRagAmber,
+      rag_amber: pRagAmber,
+      ragGreen: pRagGreen,
+      rag_green: pRagGreen,
+      avgProgress: pAvgProgress,
+      avg_progress: pAvgProgress,
+      projectCount: personProjectsSet.size
+    });
+  }
+
+  const personProjectAggregates = [];
+  for (const pp of personProjectMap.values()) {
+    const taskCountForAvg = includeDone ? pp.totalTasks : pp.totalOpen;
+    const progressTotal = includeDone
+      ? pp.progressSum
+      : pp.tasks.filter((t) => t.status !== 'Done').reduce((s, t) => s + t.progress, 0);
+    pp.avgProgress = taskCountForAvg ? Math.round(progressTotal / taskCountForAvg) : 0;
+    pp.avg_progress = pp.avgProgress;
+    delete pp.progressSum;
+    personProjectAggregates.push(pp);
+  }
+
+  // Build projectAggregates
+  const projectAggregates = projects.map((proj) => {
+    const pps = personProjectAggregates.filter((pp) => pp.projectId === proj.project_id);
+    const projTotalOpen = pps.reduce((s, pp) => s + pp.totalOpen, 0);
+    const projCompleted = pps.reduce((s, pp) => s + pp.completed, 0);
+    const projTotalTasks = pps.reduce((s, pp) => s + pp.totalTasks, 0);
+    const projInProgress = pps.reduce((s, pp) => s + pp.inProgress, 0);
+    const projNotStarted = pps.reduce((s, pp) => s + pp.notStarted, 0);
+    const projBlocked = pps.reduce((s, pp) => s + pp.blocked, 0);
+    const projOnHold = pps.reduce((s, pp) => s + pp.onHold, 0);
+    const projOverdue = pps.reduce((s, pp) => s + pp.overdue, 0);
+    const projDueThisWeek = pps.reduce((s, pp) => s + pp.dueThisWeek, 0);
+    const projRagRed = pps.reduce((s, pp) => s + pp.ragRed, 0);
+    const projRagAmber = pps.reduce((s, pp) => s + pp.ragAmber, 0);
+    const projRagGreen = pps.reduce((s, pp) => s + pp.ragGreen, 0);
+
+    const peopleWithWork = pps.filter((pp) => (includeDone ? pp.totalTasks > 0 : pp.totalOpen > 0));
+    const peopleCount = peopleWithWork.length;
+
+    const projTasks = tasks.filter((t) => t.project_id === proj.project_id && (includeDone || t.status !== 'Done'));
+    const avgProgress = projTasks.length
+      ? Math.round(projTasks.reduce((s, t) => s + (t.progress || 0), 0) / projTasks.length)
+      : 0;
+
+    return {
+      projectId: proj.project_id,
+      project_id: proj.project_id,
+      projectCode: proj.project_code,
+      project_code: proj.project_code,
+      projectName: proj.project_name,
+      project_name: proj.project_name,
+      portfolioName: proj.portfolio_name,
+      projectStatus: proj.project_status,
+      ragStatus: proj.rag_status,
+      mainPmName: proj.main_pm_name,
+      totalOpen: projTotalOpen,
+      total: projTotalOpen,
+      completed: projCompleted,
+      totalTasks: projTotalTasks,
+      total_tasks: projTotalTasks,
+      inProgress: projInProgress,
+      in_progress: projInProgress,
+      notStarted: projNotStarted,
+      not_started: projNotStarted,
+      blocked: projBlocked,
+      onHold: projOnHold,
+      on_hold: projOnHold,
+      overdue: projOverdue,
+      dueThisWeek: projDueThisWeek,
+      due_this_week: projDueThisWeek,
+      ragRed: projRagRed,
+      rag_red: projRagRed,
+      ragAmber: projRagAmber,
+      rag_amber: projRagAmber,
+      ragGreen: projRagGreen,
+      rag_green: projRagGreen,
+      peopleCount,
+      people_count: peopleCount,
+      avgProgress,
+      avg_progress: avgProgress,
+      uniqueTaskCount: tasks.filter((t) => t.project_id === proj.project_id).length
+    };
+  });
+
+  const overallTotalOpen = peopleAggregates.reduce((s, p) => s + p.totalOpen, 0);
+  const overallCompleted = peopleAggregates.reduce((s, p) => s + p.completed, 0);
+  const overallTotalTasks = peopleAggregates.reduce((s, p) => s + p.totalTasks, 0);
+  const overallInProgress = peopleAggregates.reduce((s, p) => s + p.inProgress, 0);
+  const overallNotStarted = peopleAggregates.reduce((s, p) => s + p.notStarted, 0);
+  const overallBlocked = peopleAggregates.reduce((s, p) => s + p.blocked, 0);
+  const overallOnHold = peopleAggregates.reduce((s, p) => s + p.onHold, 0);
+  const overallOverdue = peopleAggregates.reduce((s, p) => s + p.overdue, 0);
+  const overallDueThisWeek = peopleAggregates.reduce((s, p) => s + p.dueThisWeek, 0);
+  const overallRagRed = peopleAggregates.reduce((s, p) => s + p.ragRed, 0);
+  const overallRagAmber = peopleAggregates.reduce((s, p) => s + p.ragAmber, 0);
+  const overallRagGreen = peopleAggregates.reduce((s, p) => s + p.ragGreen, 0);
+
+  const overallAvgProgress = allDetailRecords.length
+    ? Math.round(allDetailRecords.reduce((s, t) => s + t.progress, 0) / allDetailRecords.length)
+    : 0;
+
+  const overallSummary = {
+    totalProjects: projects.length,
+    totalPeople: qualifyingPeople.length,
+    totalOpen: overallTotalOpen,
+    completed: overallCompleted,
+    totalTasks: overallTotalTasks,
+    inProgress: overallInProgress,
+    notStarted: overallNotStarted,
+    blocked: overallBlocked,
+    onHold: overallOnHold,
+    overdue: overallOverdue,
+    dueThisWeek: overallDueThisWeek,
+    ragRed: overallRagRed,
+    ragAmber: overallRagAmber,
+    ragGreen: overallRagGreen,
+    avgProgress: overallAvgProgress
+  };
+
+  return {
+    reportDate: today,
+    report_date: today,
+    weekEndDate: weekEndStr,
+    week_end_date: weekEndStr,
+    includeDone,
+    overallSummary,
+    overall_summary: overallSummary,
+    peopleAggregates,
+    projectAggregates,
+    personProjectAggregates,
+    taskDetailRecords: allDetailRecords
+  };
 });
 
 app.get('/api/assignments', async (request) => db.prepare(`SELECT ta.*, t.task_code, t.task_name, p.display_name FROM task_assignments ta

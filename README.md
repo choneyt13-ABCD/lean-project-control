@@ -32,7 +32,8 @@ This repository contains the initial project specification and a single-user loc
 - Monorepo folder structure created.
 - Phase 1 and Phase 2 specifications, initial PostgreSQL schema, seed data, and OpenAPI contract created.
 - A local Fastify API and static web UI are available for a single-user walkthrough using the SQLite feasibility database.
-- The walkthrough displays Project Overview, Work Breakdown, Weekly Updates, RAID Register, and Activity Log. It records demo changes in the local SQLite database and Audit Log.
+- The walkthrough displays Project Overview, Work Breakdown, Weekly Updates, RAID Register, Activity Log, Project Workload, and Portfolio-level All Projects Workload. It records demo changes in the local SQLite database and Audit Log.
+- Portfolio-level All Projects Workload provides cross-project capacity comparison, risk-ordered person workload, project stacked bars, and a drill-down Person × Project Matrix. All Projects visibility is a local feasibility capability ahead of future RBAC and portfolio visibility enforcement.
 - Task creation now validates WBS ownership, active project membership, parent hierarchy, dates, weight, and progress. Assignment creation rejects people who are not active RRMS project members.
 - Automated API smoke tests run against an isolated temporary database with `npm test`.
 - It resolves a configured active local demo account and records that actor in audit events, but has no real login or authorization enforcement. The default `RRMS Demo PM` identity is only for local demo use.

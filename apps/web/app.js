@@ -1296,6 +1296,12 @@ async function workloadView() {
                           <option value="Green">Green</option>
                         </select>
                       </label>
+                      <label><span>Group by</span>
+                        <select data-workload-group-by="${m.person_id}">
+                          <option value="">No grouping</option>
+                          <option value="activity">WBS / Activity</option>
+                        </select>
+                      </label>
                       <button type="button" class="workload-filter-reset" data-workload-filter-reset="${m.person_id}">Reset</button>
                       <span class="workload-filter-count" data-workload-filter-count="${m.person_id}">${m.total} shown</span>
                     </div>
@@ -1308,8 +1314,8 @@ async function workloadView() {
                           <th>RAG</th><th>PROGRESS</th><th>DUE DATE</th><th>ROLE</th><th>BLOCKER</th>
                         </tr></thead>
                         <tbody>
-                          ${m.tasks.map((t) => `
-                            <tr class="${t.is_overdue ? 'workload-overdue-row' : ''}" data-workload-task-row="${m.person_id}" data-task-status="${t.status}" data-task-rag="${t.rag_status}">
+                          ${m.tasks.map((t, index) => `
+                            <tr class="${t.is_overdue ? 'workload-overdue-row' : ''}" data-workload-task-row="${m.person_id}" data-task-status="${t.status}" data-task-rag="${t.rag_status}" data-task-wbs-code="${t.wbs_code || ''}" data-task-wbs-name="${t.wbs_name || ''}" data-task-original-index="${index}">
                               <td><span class="code inline-code">${t.task_code}</span></td>
                               <td>
                                 <strong>${t.task_name}</strong>
@@ -1408,20 +1414,927 @@ async function workloadView() {
 
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function allProjectsWorkloadView() {
+  const data = await api('/workload/all-projects?includeDone=true');
+  const reportDate = data.reportDate || data.report_date || new Date().toISOString().slice(0, 10);
+  const rawTasks = data.taskDetailRecords || [];
+  const initialPeople = data.peopleAggregates || [];
+  const initialProjects = data.projectAggregates || [];
+
+  let state = {
+    search: '',
+    department: '',
+    project: '',
+    status: '',
+    rag: '',
+    dueState: '',
+    relationship: '',
+    showMode: 'open',
+    includeEmptyProjects: false,
+    selectedPersonId: null,
+    selectedProjectId: null,
+    matrixSort: 'risk',
+    matrixSortDir: 'desc',
+    detailSelection: null,
+    detailGroupBy: 'project'
+  };
+
+  const departments = [...new Set(initialPeople.map((p) => p.department).filter(Boolean))].sort();
+  const allActiveProjects = [...initialProjects].sort((a, b) => (a.projectCode || a.project_code || '').localeCompare(b.projectCode || b.project_code || ''));
+
+  function render() {
+    const filteredTasks = rawTasks.filter((t) => {
+      if (state.showMode === 'open' && t.status === 'Done') return false;
+      if (state.search) {
+        const q = state.search.toLowerCase().trim();
+        const matches = (t.personName || t.person_name || '').toLowerCase().includes(q)
+          || (t.taskName || t.task_name || '').toLowerCase().includes(q)
+          || (t.taskCode || t.task_code || '').toLowerCase().includes(q)
+          || (t.projectCode || t.project_code || '').toLowerCase().includes(q)
+          || (t.wbsName || t.wbs_name || '').toLowerCase().includes(q)
+          || (t.wbsCode || t.wbs_code || '').toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      if (state.department) {
+        const person = initialPeople.find((p) => p.personId === t.personId || p.person_id === t.personId);
+        if ((person?.department || '') !== state.department) return false;
+      }
+      if (state.project && (t.projectId || t.project_id) !== state.project) return false;
+      if (state.status && t.status !== state.status) return false;
+      if (state.rag && (t.ragStatus || t.rag_status) !== state.rag) return false;
+      if (state.dueState === 'overdue' && !t.isOverdue && !t.is_overdue) return false;
+      if (state.dueState === 'due_this_week' && !t.isDueThisWeek && !t.is_due_this_week) return false;
+      if (state.dueState === 'no_due_date' && (t.plannedDueDate || t.planned_due_date)) return false;
+      if (state.relationship === 'owner' && !t.isOwner && !t.is_owner) return false;
+      if (state.relationship === 'assignee' && !t.isAssignee && !t.is_assignee) return false;
+      if (state.relationship === 'owner_or_assignee' && !(t.isOwner || t.is_owner || t.isAssignee || t.is_assignee)) return false;
+
+      if (state.selectedPersonId && (t.personId || t.person_id) !== state.selectedPersonId) return false;
+      if (state.selectedProjectId && (t.projectId || t.project_id) !== state.selectedProjectId) return false;
+
+      return true;
+    });
+
+    const totalOpenWork = filteredTasks.filter((t) => t.status !== 'Done').length;
+    const totalDoneWork = filteredTasks.filter((t) => t.status === 'Done').length;
+    const totalTasksCount = state.showMode === 'all' ? filteredTasks.length : totalOpenWork;
+    const totalOverdue = filteredTasks.filter((t) => (t.isOverdue || t.is_overdue)).length;
+    const totalBlocked = filteredTasks.filter((t) => t.status === 'Blocked').length;
+    const totalDueThisWeek = filteredTasks.filter((t) => (t.isDueThisWeek || t.is_due_this_week)).length;
+    const totalRed = filteredTasks.filter((t) => (t.ragStatus || t.rag_status) === 'Red').length;
+    const activePeopleIds = new Set(filteredTasks.map((t) => t.personId || t.person_id));
+    const activeProjectIds = new Set(filteredTasks.map((t) => t.projectId || t.project_id));
+
+    let basePeople = initialPeople.filter((p) => {
+      const pId = p.personId || p.person_id;
+      if (state.department && p.department !== state.department) return false;
+      if (state.search) {
+        const q = state.search.toLowerCase().trim();
+        const matches = (p.displayName || p.display_name || '').toLowerCase().includes(q)
+          || (p.employeeCode || p.employee_code || '').toLowerCase().includes(q);
+        if (!matches && !filteredTasks.some((t) => (t.personId || t.person_id) === pId)) return false;
+      }
+      return true;
+    });
+
+    const peopleWorkload = basePeople.map((p) => {
+      const pId = p.personId || p.person_id;
+      const pTasks = filteredTasks.filter((t) => (t.personId || t.person_id) === pId);
+      const openTasks = pTasks.filter((t) => t.status !== 'Done');
+      const count = state.showMode === 'all' ? pTasks.length : openTasks.length;
+      const inProgress = pTasks.filter((t) => t.status === 'InProgress').length;
+      const notStarted = pTasks.filter((t) => t.status === 'NotStarted').length;
+      const blocked = pTasks.filter((t) => t.status === 'Blocked').length;
+      const onHold = pTasks.filter((t) => t.status === 'OnHold').length;
+      const done = pTasks.filter((t) => t.status === 'Done').length;
+      const overdue = pTasks.filter((t) => t.isOverdue || t.is_overdue).length;
+      const dueThisWeek = pTasks.filter((t) => t.isDueThisWeek || t.is_due_this_week).length;
+      const ragRed = pTasks.filter((t) => (t.ragStatus || t.rag_status) === 'Red').length;
+      const ragAmber = pTasks.filter((t) => (t.ragStatus || t.rag_status) === 'Amber').length;
+      const ragGreen = pTasks.filter((t) => (t.ragStatus || t.rag_status) === 'Green').length;
+      const avgProgress = pTasks.length ? Math.round(pTasks.reduce((s, t) => s + (t.progress || 0), 0) / pTasks.length) : 0;
+      const projectsCount = new Set(pTasks.map((t) => t.projectId || t.project_id)).size;
+
+      return {
+        ...p,
+        personId: pId,
+        displayName: p.displayName || p.display_name,
+        employeeCode: p.employeeCode || p.employee_code,
+        total: count,
+        totalOpen: openTasks.length,
+        inProgress,
+        notStarted,
+        blocked,
+        onHold,
+        done,
+        overdue,
+        dueThisWeek,
+        ragRed,
+        ragAmber,
+        ragGreen,
+        avgProgress,
+        projectsCount,
+        tasks: pTasks
+      };
+    });
+
+    const sortedPeople = [...peopleWorkload].sort((a, b) => {
+      return (b.blocked - a.blocked)
+        || (b.overdue - a.overdue)
+        || (b.ragRed - a.ragRed)
+        || (b.total - a.total)
+        || a.displayName.localeCompare(b.displayName);
+    });
+
+    let baseProjects = allActiveProjects.filter((proj) => {
+      const projId = proj.projectId || proj.project_id;
+      if (state.project && projId !== state.project) return false;
+      return true;
+    });
+
+    const projectWorkload = baseProjects.map((proj) => {
+      const projId = proj.projectId || proj.project_id;
+      const projTasks = filteredTasks.filter((t) => (t.projectId || t.project_id) === projId);
+      const openTasks = projTasks.filter((t) => t.status !== 'Done');
+      const count = state.showMode === 'all' ? projTasks.length : openTasks.length;
+      const ragRed = projTasks.filter((t) => (t.ragStatus || t.rag_status) === 'Red').length;
+      const ragAmber = projTasks.filter((t) => (t.ragStatus || t.rag_status) === 'Amber').length;
+      const ragGreen = projTasks.filter((t) => (t.ragStatus || t.rag_status) === 'Green').length;
+      const overdue = projTasks.filter((t) => t.isOverdue || t.is_overdue).length;
+      const blocked = projTasks.filter((t) => t.status === 'Blocked').length;
+      const peopleWithWork = new Set(projTasks.map((t) => t.personId || t.person_id)).size;
+      const avgProgress = projTasks.length ? Math.round(projTasks.reduce((s, t) => s + (t.progress || 0), 0) / projTasks.length) : 0;
+
+      return {
+        ...proj,
+        projectId: projId,
+        projectCode: proj.projectCode || proj.project_code,
+        projectName: proj.projectName || proj.project_name,
+        portfolioName: proj.portfolioName || proj.portfolio_name,
+        total: count,
+        totalOpen: openTasks.length,
+        ragRed,
+        ragAmber,
+        ragGreen,
+        overdue,
+        blocked,
+        peopleCount: peopleWithWork,
+        avgProgress,
+        tasks: projTasks
+      };
+    });
+
+    const sortedProjects = [...projectWorkload]
+      .filter((proj) => state.includeEmptyProjects || proj.total > 0)
+      .sort((a, b) => (b.total - a.total) || a.projectCode.localeCompare(b.projectCode));
+
+    const visibleProjects = sortedProjects.length ? sortedProjects : allActiveProjects.map((p) => ({
+      ...p,
+      projectId: p.projectId || p.project_id,
+      projectCode: p.projectCode || p.project_code,
+      projectName: p.projectName || p.project_name
+    }));
+
+    let matrixPeople = [...peopleWorkload];
+    if (state.matrixSort === 'totalOpen') {
+      matrixPeople.sort((a, b) => state.matrixSortDir === 'asc' ? a.total - b.total : b.total - a.total);
+    } else if (state.matrixSort === 'overdue') {
+      matrixPeople.sort((a, b) => state.matrixSortDir === 'asc' ? a.overdue - b.overdue : b.overdue - a.overdue);
+    } else if (state.matrixSort === 'blocked') {
+      matrixPeople.sort((a, b) => state.matrixSortDir === 'asc' ? a.blocked - b.blocked : b.blocked - a.blocked);
+    } else if (state.matrixSort === 'ragRed') {
+      matrixPeople.sort((a, b) => state.matrixSortDir === 'asc' ? a.ragRed - b.ragRed : b.ragRed - a.ragRed);
+    } else if (state.matrixSort === 'name') {
+      matrixPeople.sort((a, b) => state.matrixSortDir === 'asc' ? a.displayName.localeCompare(b.displayName) : b.displayName.localeCompare(a.displayName));
+    } else {
+      matrixPeople.sort((a, b) => (b.blocked - a.blocked) || (b.overdue - a.overdue) || (b.ragRed - a.ragRed) || (b.total - a.total));
+    }
+
+    let drillTasks = filteredTasks;
+    let drillTitle = 'All filtered tasks';
+    if (state.detailSelection) {
+      const { personId, projectId } = state.detailSelection;
+      if (personId && projectId) {
+        const person = initialPeople.find((p) => (p.personId || p.person_id) === personId);
+        const proj = allActiveProjects.find((p) => (p.projectId || p.project_id) === projectId);
+        drillTitle = `Tasks for ${person?.displayName || person?.display_name || 'Person'} in [${proj?.projectCode || proj?.project_code || 'Project'}] ${proj?.projectName || proj?.project_name || ''}`;
+        drillTasks = filteredTasks.filter((t) => (t.personId || t.person_id) === personId && (t.projectId || t.project_id) === projectId);
+      } else if (personId) {
+        const person = initialPeople.find((p) => (p.personId || p.person_id) === personId);
+        drillTitle = `All cross-project tasks for ${person?.displayName || person?.display_name || 'Person'}`;
+        drillTasks = filteredTasks.filter((t) => (t.personId || t.person_id) === personId);
+      } else if (projectId) {
+        const proj = allActiveProjects.find((p) => (p.projectId || p.project_id) === projectId);
+        drillTitle = `All team tasks in [${proj?.projectCode || proj?.project_code || 'Project'}] ${proj?.projectName || proj?.project_name || ''}`;
+        drillTasks = filteredTasks.filter((t) => (t.projectId || t.project_id) === projectId);
+      }
+    }
+
+    const maxPersonTotal = Math.max(1, ...sortedPeople.map((p) => p.total));
+    const maxProjectTotal = Math.max(1, ...sortedProjects.map((p) => p.total));
+
+    content.innerHTML = `
+      <section class="control-hero all-workload-hero">
+        <div>
+          <span class="section-kicker">PORTFOLIO WORKLOAD REPORT</span>
+          <h2>All Projects Workload — ภาระงานรายบุคคลแบบรวมทุก Project</h2>
+          <p>วิเคราะห์และควบคุมภาระงาน ความเสี่ยง และจุดติดขัดของบุคลากรทุกคนจากทุก Active Project · วันที่ ${reportDate}</p>
+        </div>
+      </section>
+
+      <div class="cards">
+        <div class="card">
+          <p>ภาระงานเปิดทั้งหมด</p>
+          <div class="metric">${totalOpenWork}</div>
+          <p>${totalDoneWork} Done · ${filteredTasks.length} รวม</p>
+          <p>${activePeopleIds.size} บุคลากร · ${activeProjectIds.size} Projects</p>
+        </div>
+        <div class="card">
+          <p>Overdue (เลยกำหนด)</p>
+          <div class="metric" style="${totalOverdue > 0 ? 'color:var(--red)' : ''}">${totalOverdue}</div>
+          <p>งานที่เกิน Due date และยังไม่ Done</p>
+        </div>
+        <div class="card">
+          <p>Blocked (ติดขัด)</p>
+          <div class="metric" style="${totalBlocked > 0 ? 'color:var(--red)' : ''}">${totalBlocked}</div>
+          <p>ต้องแก้ไขหรือปลดล็อกเร่งด่วน</p>
+        </div>
+        <div class="card">
+          <p>Due สัปดาห์นี้</p>
+          <div class="metric" style="${totalDueThisWeek > 0 ? 'color:var(--amber)' : ''}">${totalDueThisWeek}</div>
+          <p>ครบกำหนดภายในสัปดาห์นี้</p>
+        </div>
+        <div class="card">
+          <p>Red RAG</p>
+          <div class="metric" style="${totalRed > 0 ? 'color:var(--red)' : ''}">${totalRed}</div>
+          <p>งานสัญญาณความเสี่ยงแดง</p>
+        </div>
+      </div>
+
+      <section class="all-workload-filter-card">
+        <div class="all-workload-filter-grid">
+          <label>
+            <span>Search Person</span>
+            <input type="text" id="all-workload-search" placeholder="Filter by name, code..." value="${escapeHtml(state.search)}">
+          </label>
+          <label>
+            <span>Department</span>
+            <select id="all-workload-dept">
+              <option value="">All departments</option>
+              ${departments.map((d) => `<option value="${escapeHtml(d)}" ${d === state.department ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('')}
+            </select>
+          </label>
+          <label>
+            <span>Project</span>
+            <select id="all-workload-proj">
+              <option value="">All active projects</option>
+              ${allActiveProjects.map((p) => {
+                const pId = p.projectId || p.project_id;
+                const pCode = p.projectCode || p.project_code;
+                const pName = p.projectName || p.project_name;
+                return `<option value="${pId}" ${pId === state.project ? 'selected' : ''}>[${pCode}] ${escapeHtml(pName)}</option>`;
+              }).join('')}
+            </select>
+          </label>
+          <label>
+            <span>Status</span>
+            <select id="all-workload-status">
+              <option value="">All statuses</option>
+              <option value="InProgress" ${state.status === 'InProgress' ? 'selected' : ''}>In progress</option>
+              <option value="Blocked" ${state.status === 'Blocked' ? 'selected' : ''}>Blocked</option>
+              <option value="OnHold" ${state.status === 'OnHold' ? 'selected' : ''}>On hold</option>
+              <option value="NotStarted" ${state.status === 'NotStarted' ? 'selected' : ''}>Not started</option>
+              <option value="Done" ${state.status === 'Done' ? 'selected' : ''}>Done</option>
+            </select>
+          </label>
+          <label>
+            <span>RAG</span>
+            <select id="all-workload-rag">
+              <option value="">All RAG</option>
+              <option value="Red" ${state.rag === 'Red' ? 'selected' : ''}>Red</option>
+              <option value="Amber" ${state.rag === 'Amber' ? 'selected' : ''}>Amber</option>
+              <option value="Green" ${state.rag === 'Green' ? 'selected' : ''}>Green</option>
+            </select>
+          </label>
+          <label>
+            <span>Due State</span>
+            <select id="all-workload-due">
+              <option value="">All due states</option>
+              <option value="overdue" ${state.dueState === 'overdue' ? 'selected' : ''}>Overdue</option>
+              <option value="due_this_week" ${state.dueState === 'due_this_week' ? 'selected' : ''}>Due this week</option>
+              <option value="no_due_date" ${state.dueState === 'no_due_date' ? 'selected' : ''}>No due date</option>
+            </select>
+          </label>
+          <label>
+            <span>Assignment Relationship</span>
+            <select id="all-workload-rel">
+              <option value="">Owner or assignee</option>
+              <option value="owner" ${state.relationship === 'owner' ? 'selected' : ''}>Owner</option>
+              <option value="assignee" ${state.relationship === 'assignee' ? 'selected' : ''}>Assignee</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="all-workload-filter-bottom">
+          <div class="all-workload-filter-toggles">
+            <label>
+              <input type="radio" name="showMode" value="open" ${state.showMode === 'open' ? 'checked' : ''}>
+              <span>Open work only</span>
+            </label>
+            <label>
+              <input type="radio" name="showMode" value="all" ${state.showMode === 'all' ? 'checked' : ''}>
+              <span>Include Done</span>
+            </label>
+            <label>
+              <input type="checkbox" id="all-workload-empty-proj" ${state.includeEmptyProjects ? 'checked' : ''}>
+              <span>Include projects with no open work</span>
+            </label>
+          </div>
+          <div class="all-workload-filter-actions">
+            <span class="all-workload-filter-stats">
+              ${filteredTasks.length} tasks shown · ${activePeopleIds.size} people · ${activeProjectIds.size} projects
+            </span>
+            ${state.selectedPersonId ? `<button type="button" class="secondary compact-btn" id="all-workload-clear-person">✕ Clear Person Selection</button>` : ''}
+            ${state.selectedProjectId ? `<button type="button" class="secondary compact-btn" id="all-workload-clear-proj">✕ Clear Project Selection</button>` : ''}
+            <button type="button" class="secondary compact-btn" id="all-workload-reset">Reset</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="all-workload-charts-grid">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <h3>ส่วนที่ 1: Workload by Person</h3>
+              <p>เรียงตามความเสี่ยง (Blocked → Overdue → Red RAG → Total) · คลิกที่แถบเพื่อกรอง</p>
+            </div>
+            <span class="badge gray">${sortedPeople.length} บุคลากร</span>
+          </div>
+
+          <div class="chart-legend">
+            <span class="chart-legend-item"><span class="rag-dot" style="background:#215f45"></span> In progress</span>
+            <span class="chart-legend-item"><span class="rag-dot" style="background:#a2b0a5"></span> Not started</span>
+            <span class="chart-legend-item"><span class="rag-dot" style="background:#d9544d"></span> Blocked</span>
+            <span class="chart-legend-item"><span class="rag-dot" style="background:#e3a329"></span> On hold</span>
+            ${state.showMode === 'all' ? '<span class="chart-legend-item"><span class="rag-dot" style="background:#7ab38d"></span> Done</span>' : ''}
+          </div>
+
+          <div class="chart-bars-list">
+            ${sortedPeople.length ? sortedPeople.map((p) => {
+              const isSelected = state.selectedPersonId === p.personId;
+              const barPercent = Math.max(3, Math.round((p.total / maxPersonTotal) * 100));
+              const segInProg = p.total ? Math.round((p.inProgress / p.total) * 100) : 0;
+              const segNotStarted = p.total ? Math.round((p.notStarted / p.total) * 100) : 0;
+              const segBlocked = p.total ? Math.round((p.blocked / p.total) * 100) : 0;
+              const segOnHold = p.total ? Math.round((p.onHold / p.total) * 100) : 0;
+              const segDone = p.total && state.showMode === 'all' ? Math.round((p.done / p.total) * 100) : 0;
+
+              return `
+                <button type="button" class="workload-bar-item ${isSelected ? 'active' : ''}" data-person-bar="${p.personId}" aria-pressed="${isSelected}">
+                  <div class="workload-bar-item-header">
+                    <div>
+                      <strong>${escapeHtml(p.displayName)}</strong>
+                      <small class="cell-note">${escapeHtml(p.department || '—')} ${p.employeeCode ? `· ${p.employeeCode}` : ''}</small>
+                    </div>
+                    <div>
+                      <strong>${p.total}</strong> <small class="cell-note">tasks (${p.projectsCount} proj)</small>
+                    </div>
+                  </div>
+                  <div class="workload-bar-track" style="width: ${barPercent}%" title="Total: ${p.total}">
+                    ${segBlocked > 0 ? `<div class="workload-bar-segment blocked" style="width:${segBlocked}%" title="Blocked: ${p.blocked}"></div>` : ''}
+                    ${segInProg > 0 ? `<div class="workload-bar-segment in-progress" style="width:${segInProg}%" title="In progress: ${p.inProgress}"></div>` : ''}
+                    ${segOnHold > 0 ? `<div class="workload-bar-segment on-hold" style="width:${segOnHold}%" title="On hold: ${p.onHold}"></div>` : ''}
+                    ${segNotStarted > 0 ? `<div class="workload-bar-segment not-started" style="width:${segNotStarted}%" title="Not started: ${p.notStarted}"></div>` : ''}
+                    ${segDone > 0 ? `<div class="workload-bar-segment done" style="width:${segDone}%" title="Done: ${p.done}"></div>` : ''}
+                  </div>
+                  <div class="workload-bar-badges">
+                    ${p.blocked > 0 ? `<span class="badge red">🚫 ${p.blocked} Blocked</span>` : ''}
+                    ${p.overdue > 0 ? `<span class="badge red">⚠️ ${p.overdue} Overdue</span>` : ''}
+                    ${p.ragRed > 0 ? `<span class="badge red">🔴 ${p.ragRed} Red RAG</span>` : ''}
+                    ${p.ragAmber > 0 ? `<span class="badge amber">🟡 ${p.ragAmber} Amber</span>` : ''}
+                    ${p.ragGreen > 0 ? `<span class="badge green">🟢 ${p.ragGreen} Green</span>` : ''}
+                    <span class="cell-note subtle">Avg: ${p.avgProgress}%</span>
+                  </div>
+                </button>
+              `;
+            }).join('') : '<p class="empty">No people match filters.</p>'}
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div>
+              <h3>ส่วนที่ 2: Workload by Project</h3>
+              <p>เรียงตามภาระงานมากไปน้อย · แบ่งตาม RAG · คลิกที่แถบเพื่อกรอง</p>
+            </div>
+            <span class="badge gray">${sortedProjects.length} Projects</span>
+          </div>
+
+          <div class="chart-legend">
+            <span class="chart-legend-item"><span class="rag-dot red"></span> Red</span>
+            <span class="chart-legend-item"><span class="rag-dot amber"></span> Amber</span>
+            <span class="chart-legend-item"><span class="rag-dot green"></span> Green</span>
+          </div>
+
+          <div class="chart-bars-list">
+            ${sortedProjects.length ? sortedProjects.map((proj) => {
+              const isSelected = state.selectedProjectId === proj.projectId;
+              const barPercent = Math.max(3, Math.round((proj.total / maxProjectTotal) * 100));
+              const segRed = proj.total ? Math.round((proj.ragRed / proj.total) * 100) : 0;
+              const segAmber = proj.total ? Math.round((proj.ragAmber / proj.total) * 100) : 0;
+              const segGreen = proj.total ? Math.round((proj.ragGreen / proj.total) * 100) : 0;
+
+              return `
+                <button type="button" class="workload-bar-item ${isSelected ? 'active' : ''}" data-project-bar="${proj.projectId}" aria-pressed="${isSelected}">
+                  <div class="workload-bar-item-header">
+                    <div>
+                      <strong>[${proj.projectCode}]</strong> ${escapeHtml(proj.projectName)}
+                      <small class="cell-note">${proj.portfolioName || 'Portfolio'}</small>
+                    </div>
+                    <div>
+                      <strong>${proj.total}</strong> <small class="cell-note">tasks</small>
+                    </div>
+                  </div>
+                  <div class="workload-bar-track" style="width: ${barPercent}%" title="Total: ${proj.total}">
+                    ${segRed > 0 ? `<div class="workload-bar-segment rag-red" style="width:${segRed}%" title="Red: ${proj.ragRed}"></div>` : ''}
+                    ${segAmber > 0 ? `<div class="workload-bar-segment rag-amber" style="width:${segAmber}%" title="Amber: ${proj.ragAmber}"></div>` : ''}
+                    ${segGreen > 0 ? `<div class="workload-bar-segment rag-green" style="width:${segGreen}%" title="Green: ${proj.ragGreen}"></div>` : ''}
+                  </div>
+                  <div class="workload-bar-badges">
+                    <span class="badge gray">👥 ${proj.peopleCount} people</span>
+                    ${proj.overdue > 0 ? `<span class="badge red">⚠️ ${proj.overdue} Overdue</span>` : ''}
+                    ${proj.blocked > 0 ? `<span class="badge red">🚫 ${proj.blocked} Blocked</span>` : ''}
+                    <span class="cell-note subtle">Avg: ${proj.avgProgress}%</span>
+                  </div>
+                </button>
+              `;
+            }).join('') : '<p class="empty">No projects match filters.</p>'}
+          </div>
+        </div>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>ส่วนที่ 3: Person × Project Matrix</h2>
+            <span class="subtle">คลิกช่องตารางเพื่อ Drill-down รายละเอียดตาม Person → Project → WBS/Activity → Work items</span>
+          </div>
+          <div class="drilldown-controls">
+            <label>Sort Matrix
+              <select id="matrix-sort-select">
+                <option value="risk" ${state.matrixSort === 'risk' ? 'selected' : ''}>Risk Priority (Blocked/Overdue/RAG)</option>
+                <option value="totalOpen" ${state.matrixSort === 'totalOpen' ? 'selected' : ''}>Total Open</option>
+                <option value="overdue" ${state.matrixSort === 'overdue' ? 'selected' : ''}>Overdue</option>
+                <option value="blocked" ${state.matrixSort === 'blocked' ? 'selected' : ''}>Blocked</option>
+                <option value="ragRed" ${state.matrixSort === 'ragRed' ? 'selected' : ''}>Red RAG</option>
+                <option value="name" ${state.matrixSort === 'name' ? 'selected' : ''}>Person Name</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="all-projects-matrix-wrap">
+          <table class="matrix-table">
+            <thead>
+              <tr>
+                <th style="min-width: 170px;">
+                  <button type="button" class="sort-btn" data-matrix-sort="name">PERSON / ROLE ↕</button>
+                </th>
+                ${visibleProjects.map((proj) => `
+                  <th class="num-col" title="${escapeHtml(proj.projectName)}">
+                    [${proj.projectCode}]
+                  </th>
+                `).join('')}
+                <th class="num-col"><button type="button" class="sort-btn" data-matrix-sort="totalOpen">TOTAL OPEN ↕</button></th>
+                <th class="num-col">IN PROG</th>
+                <th class="num-col"><button type="button" class="sort-btn" data-matrix-sort="blocked">BLOCKED ↕</button></th>
+                <th class="num-col"><button type="button" class="sort-btn" data-matrix-sort="overdue">OVERDUE ↕</button></th>
+                <th class="num-col"><button type="button" class="sort-btn" data-matrix-sort="ragRed">RED RAG ↕</button></th>
+                <th class="num-col" style="min-width: 100px;">AVG PROGRESS</th>
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${matrixPeople.length ? matrixPeople.map((p) => {
+                const isSelected = state.selectedPersonId === p.personId;
+                return `
+                  <tr class="${isSelected ? 'selected-person' : ''}">
+                    <td>
+                      <strong>${escapeHtml(p.displayName)}</strong>
+                      <small class="cell-note">${escapeHtml(p.department || '—')} ${p.employeeCode ? `· ${p.employeeCode}` : ''}</small>
+                    </td>
+                    ${visibleProjects.map((proj) => {
+                      const cellTasks = filteredTasks.filter((t) => (t.personId || t.person_id) === p.personId && (t.projectId || t.project_id) === proj.projectId);
+                      const openCount = cellTasks.filter((t) => state.showMode === 'all' || t.status !== 'Done').length;
+                      const hasOverdue = cellTasks.some((t) => t.isOverdue || t.is_overdue);
+                      const hasBlocked = cellTasks.some((t) => t.status === 'Blocked');
+                      const hasRed = cellTasks.some((t) => (t.ragStatus || t.rag_status) === 'Red');
+
+                      if (openCount === 0) {
+                        return '<td class="num-col cell-note subtle">—</td>';
+                      }
+                      const riskClass = (hasOverdue || hasBlocked || hasRed) ? 'has-risk' : '';
+                      const warningText = hasBlocked ? '🚫' : hasOverdue ? '⚠️' : hasRed ? '🔴' : '';
+
+                      return `
+                        <td class="num-col">
+                          <button type="button" class="matrix-cell-btn ${riskClass}" data-matrix-cell="${p.personId}:${proj.projectId}" title="Drilldown ${escapeHtml(p.displayName)} in ${proj.projectCode}">
+                            ${openCount} ${warningText}
+                          </button>
+                        </td>
+                      `;
+                    }).join('')}
+                    <td class="num-col"><strong>${p.total}</strong></td>
+                    <td class="num-col">${p.inProgress}</td>
+                    <td class="num-col">${p.blocked > 0 ? `<span class="badge red">${p.blocked}</span>` : '—'}</td>
+                    <td class="num-col">${p.overdue > 0 ? `<span class="badge red">${p.overdue}</span>` : '—'}</td>
+                    <td class="num-col">${p.ragRed > 0 ? `<span class="badge red">${p.ragRed}</span>` : '—'}</td>
+                    <td class="num-col">
+                      <strong>${p.avgProgress}%</strong>
+                      <div class="progress compact"><span style="width:${p.avgProgress}%"></span></div>
+                    </td>
+                    <td>
+                      <button type="button" class="secondary compact-btn" data-matrix-view-person="${p.personId}">Detail</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('') : '<tr><td colspan="15" class="empty">No people matching current filters.</td></tr>'}
+            </tbody>
+            <tfoot>
+              <tr class="matrix-total-row">
+                <td>TOTAL</td>
+                ${visibleProjects.map((proj) => {
+                  const projTasks = filteredTasks.filter((t) => (t.projectId || t.project_id) === proj.projectId);
+                  const projColTotal = projTasks.filter((t) => state.showMode === 'all' || t.status !== 'Done').length;
+                  return `<td class="num-col"><strong>${projColTotal}</strong></td>`;
+                }).join('')}
+                <td class="num-col"><strong>${totalTasksCount}</strong></td>
+                <td class="num-col"><strong>${filteredTasks.filter((t) => t.status === 'InProgress').length}</strong></td>
+                <td class="num-col"><strong>${totalBlocked}</strong></td>
+                <td class="num-col"><strong>${totalOverdue}</strong></td>
+                <td class="num-col"><strong>${totalRed}</strong></td>
+                <td class="num-col">
+                  <strong>${filteredTasks.length ? Math.round(filteredTasks.reduce((s, t) => s + (t.progress || 0), 0) / filteredTasks.length) : 0}%</strong>
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+      <section class="drilldown-panel" id="all-workload-drilldown">
+        <div class="drilldown-header">
+          <div class="drilldown-breadcrumb">
+            <strong>📋 ${drillTitle}</strong>
+            <span class="subtle"> (${drillTasks.length} work items)</span>
+          </div>
+          <div class="drilldown-controls">
+            <label>
+              <span>Group by</span>
+              <select id="drilldown-group-by">
+                <option value="project" ${state.detailGroupBy === 'project' ? 'selected' : ''}>Project</option>
+                <option value="activity" ${state.detailGroupBy === 'activity' ? 'selected' : ''}>WBS / Activity</option>
+                <option value="none" ${state.detailGroupBy === 'none' ? 'selected' : ''}>No grouping</option>
+              </select>
+            </label>
+            ${state.detailSelection ? `<button type="button" class="secondary compact-btn" id="drilldown-clear-selection">View All Filtered Items</button>` : ''}
+          </div>
+        </div>
+
+        ${drillTasks.length ? renderDrillTable(drillTasks, state.detailGroupBy) : '<p class="empty">No tasks found matching this selection.</p>'}
+      </section>
+    `;
+
+    bindEvents();
+  }
+
+  function renderDrillTable(tasks, groupBy) {
+    if (groupBy === 'project') {
+      const groups = new Map();
+      tasks.forEach((t) => {
+        const key = t.projectId || t.project_id || 'other';
+        const code = t.projectCode || t.project_code || '—';
+        const name = t.projectName || t.project_name || 'Other';
+        if (!groups.has(key)) groups.set(key, { code, name, items: [] });
+        groups.get(key).items.push(t);
+      });
+      const groupEntries = [...groups.values()].sort((a, b) => a.code.localeCompare(b.code));
+
+      return `
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>CODE</th><th>TASK NAME</th><th>WBS / ACTIVITY</th><th>ASSIGNEE / ROLE</th><th>TYPE</th>
+                <th>STATUS</th><th>RAG</th><th>PROGRESS</th><th>DUE DATE</th><th>BLOCKER / NEXT STEP</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${groupEntries.map((g) => `
+                <tr class="drilldown-group-header">
+                  <td colspan="10">
+                    <span>PROJECT</span>
+                    <strong>[${g.code}] ${escapeHtml(g.name)} (${g.items.length} work items)</strong>
+                  </td>
+                </tr>
+                ${g.items.map(renderTaskRow).join('')}
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    if (groupBy === 'activity') {
+      const groups = new Map();
+      tasks.forEach((t) => {
+        const pCode = t.projectCode || t.project_code || '—';
+        const wCode = t.wbsCode || t.wbs_code || '—';
+        const wName = t.wbsName || t.wbs_name || 'No activity';
+        const key = `${pCode}\u0000${wCode}\u0000${wName}`;
+        if (!groups.has(key)) groups.set(key, { projCode: pCode, code: wCode, name: wName, items: [] });
+        groups.get(key).items.push(t);
+      });
+      const groupEntries = [...groups.values()].sort((a, b) => (a.projCode.localeCompare(b.projCode) || a.code.localeCompare(b.code)));
+
+      return `
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>CODE</th><th>TASK NAME</th><th>PROJECT</th><th>ASSIGNEE / ROLE</th><th>TYPE</th>
+                <th>STATUS</th><th>RAG</th><th>PROGRESS</th><th>DUE DATE</th><th>BLOCKER / NEXT STEP</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${groupEntries.map((g) => `
+                <tr class="drilldown-group-header">
+                  <td colspan="10">
+                    <span>WBS / ACTIVITY · [${g.projCode}]</span>
+                    <strong>${g.code} — ${escapeHtml(g.name)} (${g.items.length} work items)</strong>
+                  </td>
+                </tr>
+                ${g.items.map(renderTaskRow).join('')}
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>CODE</th><th>TASK NAME</th><th>PROJECT</th><th>WBS / ACTIVITY</th><th>ASSIGNEE / ROLE</th>
+              <th>TYPE</th><th>STATUS</th><th>RAG</th><th>PROGRESS</th><th>DUE DATE</th><th>BLOCKER / NEXT STEP</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tasks.map(renderTaskRow).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderTaskRow(t) {
+    const isOwner = Boolean(t.isOwner || t.is_owner);
+    const isAssignee = Boolean(t.isAssignee || t.is_assignee);
+    const relationshipBadge = (isOwner && isAssignee)
+      ? '<span class="badge green">Owner & Assignee</span>'
+      : isOwner
+      ? '<span class="badge blue">Owner</span>'
+      : '<span class="badge gray">Assignee</span>';
+
+    const rag = t.ragStatus || t.rag_status || 'Green';
+    const isOverdue = Boolean(t.isOverdue || t.is_overdue);
+    const isDueThisWeek = Boolean(t.isDueThisWeek || t.is_due_this_week);
+    const dueDate = t.plannedDueDate || t.planned_due_date;
+    const blocker = t.latestBlocker || t.latest_blocker;
+    const nextStep = t.latestNextStep || t.latest_next_step;
+    const taskCode = t.taskCode || t.task_code;
+    const taskName = t.taskName || t.task_name;
+    const projectCode = t.projectCode || t.project_code;
+    const projectName = t.projectName || t.project_name;
+    const wbsCode = t.wbsCode || t.wbs_code;
+    const wbsName = t.wbsName || t.wbs_name;
+    const personName = t.personName || t.person_name;
+    const assignmentRole = t.assignmentRole || t.assignment_role;
+    const taskType = t.taskType || t.task_type;
+
+    return `
+      <tr class="${isOverdue ? 'workload-overdue-row' : ''}">
+        <td><span class="code inline-code">${taskCode}</span></td>
+        <td>
+          <strong>${escapeHtml(taskName)}</strong>
+          ${t.workstream ? `<small class="cell-note">${escapeHtml(t.workstream)}</small>` : ''}
+        </td>
+        <td>
+          <span class="type-pill">[${projectCode}]</span>
+          <small class="cell-note">${escapeHtml(projectName)}</small>
+        </td>
+        <td>
+          <span class="type-pill wbs-pill">WBS</span>
+          <span class="code inline-code">${wbsCode || '—'}</span>
+          <small class="cell-note">${escapeHtml(wbsName || 'No activity')}</small>
+        </td>
+        <td>
+          <strong>${escapeHtml(personName)}</strong>
+          <small class="cell-note">${assignmentRole || 'TeamMember'} · ${relationshipBadge}</small>
+        </td>
+        <td>${badge(taskType)}</td>
+        <td>${badge(t.status)}</td>
+        <td>
+          <span class="rag-dot ${rag.toLowerCase()}"></span>
+          ${badge(rag)}
+        </td>
+        <td>
+          <strong>${t.progress}%</strong>
+          <div class="progress compact"><span style="width:${t.progress}%"></span></div>
+        </td>
+        <td>
+          ${dueDate ? `
+            <span class="${isOverdue ? 'badge red' : isDueThisWeek ? 'badge amber' : ''}">
+              ${dueDate} ${isOverdue ? '⚠️' : ''}
+            </span>
+          ` : '—'}
+        </td>
+        <td>
+          ${blocker ? `<span class="workload-blocker">🔴 ${escapeHtml(blocker)}</span>` : ''}
+          ${nextStep ? `<small class="cell-note subtle">→ ${escapeHtml(nextStep)}</small>` : ''}
+          ${!blocker && !nextStep ? '—' : ''}
+        </td>
+      </tr>
+    `;
+  }
+
+  function bindEvents() {
+    const searchInput = content.querySelector('#all-workload-search');
+    searchInput?.addEventListener('input', (e) => {
+      state.search = e.target.value;
+      render();
+    });
+
+    content.querySelector('#all-workload-dept')?.addEventListener('change', (e) => {
+      state.department = e.target.value;
+      render();
+    });
+    content.querySelector('#all-workload-proj')?.addEventListener('change', (e) => {
+      state.project = e.target.value;
+      render();
+    });
+    content.querySelector('#all-workload-status')?.addEventListener('change', (e) => {
+      state.status = e.target.value;
+      render();
+    });
+    content.querySelector('#all-workload-rag')?.addEventListener('change', (e) => {
+      state.rag = e.target.value;
+      render();
+    });
+    content.querySelector('#all-workload-due')?.addEventListener('change', (e) => {
+      state.dueState = e.target.value;
+      render();
+    });
+    content.querySelector('#all-workload-rel')?.addEventListener('change', (e) => {
+      state.relationship = e.target.value;
+      render();
+    });
+
+    content.querySelectorAll('input[name="showMode"]').forEach((radio) => {
+      radio.addEventListener('change', (e) => {
+        state.showMode = e.target.value;
+        render();
+      });
+    });
+
+    content.querySelector('#all-workload-empty-proj')?.addEventListener('change', (e) => {
+      state.includeEmptyProjects = e.target.checked;
+      render();
+    });
+
+    content.querySelector('#all-workload-reset')?.addEventListener('click', () => {
+      state.search = '';
+      state.department = '';
+      state.project = '';
+      state.status = '';
+      state.rag = '';
+      state.dueState = '';
+      state.relationship = '';
+      state.showMode = 'open';
+      state.includeEmptyProjects = false;
+      state.selectedPersonId = null;
+      state.selectedProjectId = null;
+      state.detailSelection = null;
+      state.matrixSort = 'risk';
+      render();
+    });
+
+    content.querySelector('#all-workload-clear-person')?.addEventListener('click', () => {
+      state.selectedPersonId = null;
+      if (state.detailSelection?.personId) state.detailSelection = null;
+      render();
+    });
+    content.querySelector('#all-workload-clear-proj')?.addEventListener('click', () => {
+      state.selectedProjectId = null;
+      if (state.detailSelection?.projectId) state.detailSelection = null;
+      render();
+    });
+
+    content.querySelectorAll('[data-person-bar]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pId = btn.dataset.personBar;
+        state.selectedPersonId = state.selectedPersonId === pId ? null : pId;
+        render();
+      });
+    });
+
+    content.querySelectorAll('[data-project-bar]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const projId = btn.dataset.projectBar;
+        state.selectedProjectId = state.selectedProjectId === projId ? null : projId;
+        render();
+      });
+    });
+
+    content.querySelector('#matrix-sort-select')?.addEventListener('change', (e) => {
+      state.matrixSort = e.target.value;
+      render();
+    });
+    content.querySelectorAll('[data-matrix-sort]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const col = btn.dataset.matrixSort;
+        if (state.matrixSort === col) {
+          state.matrixSortDir = state.matrixSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.matrixSort = col;
+          state.matrixSortDir = col === 'name' ? 'asc' : 'desc';
+        }
+        render();
+      });
+    });
+
+    content.querySelectorAll('[data-matrix-cell]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const [personId, projectId] = btn.dataset.matrixCell.split(':');
+        state.detailSelection = { personId, projectId };
+        render();
+        document.getElementById('all-workload-drilldown')?.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+
+    content.querySelectorAll('[data-matrix-view-person]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const personId = btn.dataset.matrixViewPerson;
+        state.detailSelection = { personId, projectId: null };
+        render();
+        document.getElementById('all-workload-drilldown')?.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+
+    content.querySelector('#drilldown-group-by')?.addEventListener('change', (e) => {
+      state.detailGroupBy = e.target.value;
+      render();
+    });
+
+    content.querySelector('#drilldown-clear-selection')?.addEventListener('click', () => {
+      state.detailSelection = null;
+      render();
+    });
+  }
+
+  render();
+}
+
 async function projectControlPortal() {
   const sessions = {
     portfolio,
-    workload: workloadView
+    workload: workloadView,
+    'all-workload': allProjectsWorkloadView
   };
   if (!sessions[controlPortalSession]) controlPortalSession = 'portfolio';
   await sessions[controlPortalSession]();
   const labels = {
     portfolio: 'Portfolio / Projects',
-    workload: 'Workload'
+    workload: 'Project Workload',
+    'all-workload': 'All Projects Workload'
   };
   const descriptions = {
     portfolio: 'Compare project progress, health, and delivery status across the portfolio.',
-    workload: 'Review open work, capacity, status, and delivery pressure by team member.'
+    workload: 'Review open work, capacity, status, and delivery pressure for the selected project.',
+    'all-workload': 'Analyze aggregated team capacity, cross-project workload distribution, and delivery risk across all active projects.'
   };
   content.insertAdjacentHTML('afterbegin', `<section class="portal-nav control-portal-nav"><div><span class="section-kicker">PROJECT PORTAL</span><strong>${labels[controlPortalSession]}</strong><small>${descriptions[controlPortalSession]}</small></div><div class="portal-tabs" aria-label="Project Portal views">${Object.entries(labels).map(([key, label]) => `<button class="${controlPortalSession === key ? 'active' : ''}" data-control-portal-session="${key}">${label}</button>`).join('')}</div></section>`);
 }
@@ -1432,6 +2345,7 @@ const pageTitles = { dashboard: 'Master control', 'project-control': 'Project po
 async function navigate(page) {
   if (page === 'portfolio') { controlPortalSession = 'portfolio'; page = 'project-control'; }
   if (page === 'workload') { controlPortalSession = 'workload'; page = 'project-control'; }
+  if (page === 'all-workload' || page === 'all-projects-workload') { controlPortalSession = 'all-workload'; page = 'project-control'; }
   if (page === 'projects') { portalSession = 'setup'; page = 'portal'; }
   if (page === 'structure') { portalSession = 'builder'; page = 'portal'; }
   if (page === 'admin') { portalSession = 'team'; page = 'portal'; }
@@ -1458,11 +2372,56 @@ function applyWorkloadTaskFilters(personId) {
   const status = detailRow.querySelector(`[data-workload-status-filter="${personId}"]`)?.value || '';
   const rag = detailRow.querySelector(`[data-workload-rag-filter="${personId}"]`)?.value || '';
   const rows = [...detailRow.querySelectorAll(`[data-workload-task-row="${personId}"]`)];
+  const groupBy = detailRow.querySelector(`[data-workload-group-by="${personId}"]`)?.value || '';
+  const tbody = detailRow.querySelector('tbody');
+
+  // Rebuild the table order from the original task order whenever grouping changes.
+  // This keeps Status and RAG filters independent from the presentation grouping.
+  tbody?.querySelectorAll('[data-workload-group-header]').forEach((header) => header.remove());
+  const originalOrder = (left, right) => Number(left.dataset.taskOriginalIndex) - Number(right.dataset.taskOriginalIndex);
+  if (tbody && groupBy === 'activity') {
+    const groups = new Map();
+    rows.forEach((row) => {
+      const code = row.dataset.taskWbsCode || '—';
+      const name = row.dataset.taskWbsName || 'No activity';
+      const key = `${code}\u0000${name}`;
+      if (!groups.has(key)) groups.set(key, { code, name, rows: [] });
+      groups.get(key).rows.push(row);
+    });
+    [...groups.values()]
+      .sort((left, right) => left.code.localeCompare(right.code, undefined, { numeric: true }))
+      .forEach((group) => {
+        const header = document.createElement('tr');
+        header.className = 'workload-group-header';
+        header.dataset.workloadGroupHeader = personId;
+        const cell = document.createElement('td');
+        cell.colSpan = 10;
+        const label = document.createElement('span');
+        label.textContent = 'WBS / ACTIVITY';
+        const title = document.createElement('strong');
+        title.textContent = `${group.code} — ${group.name}`;
+        cell.append(label, title);
+        header.append(cell);
+        tbody.append(header, ...group.rows.sort(originalOrder));
+      });
+  } else if (tbody) {
+    rows.sort(originalOrder).forEach((row) => tbody.append(row));
+  }
+
   let visibleCount = 0;
   rows.forEach((row) => {
     const visible = (!status || row.dataset.taskStatus === status) && (!rag || row.dataset.taskRag === rag);
     row.hidden = !visible;
     if (visible) visibleCount += 1;
+  });
+  detailRow.querySelectorAll(`[data-workload-group-header="${personId}"]`).forEach((header) => {
+    let sibling = header.nextElementSibling;
+    let hasVisibleTask = false;
+    while (sibling && !sibling.dataset.workloadGroupHeader) {
+      if (!sibling.hidden) hasVisibleTask = true;
+      sibling = sibling.nextElementSibling;
+    }
+    header.hidden = !hasVisibleTask;
   });
   const count = detailRow.querySelector(`[data-workload-filter-count="${personId}"]`);
   if (count) count.textContent = `${visibleCount} of ${rows.length} shown`;
@@ -1472,9 +2431,9 @@ function applyWorkloadTaskFilters(personId) {
 
 modal.addEventListener('click', (event) => { if (event.target.closest('[data-close-modal], .secondary[value="cancel"]')) { event.preventDefault(); modal.close(); } });
 document.addEventListener('change', (event) => {
-  const workloadFilter = event.target.closest('[data-workload-status-filter], [data-workload-rag-filter]');
+  const workloadFilter = event.target.closest('[data-workload-status-filter], [data-workload-rag-filter], [data-workload-group-by]');
   if (workloadFilter) {
-    applyWorkloadTaskFilters(workloadFilter.dataset.workloadStatusFilter || workloadFilter.dataset.workloadRagFilter);
+    applyWorkloadTaskFilters(workloadFilter.dataset.workloadStatusFilter || workloadFilter.dataset.workloadRagFilter || workloadFilter.dataset.workloadGroupBy);
     return;
   }
   const weekSelector = event.target.closest('[data-control-week]');
@@ -1510,7 +2469,7 @@ document.addEventListener('click', (event) => {
   if (resetButton) {
     const personId = resetButton.dataset.workloadFilterReset;
     const detailRow = document.getElementById(`workload-detail-${personId}`);
-    detailRow?.querySelectorAll('[data-workload-status-filter], [data-workload-rag-filter]').forEach((select) => { select.value = ''; });
+    detailRow?.querySelectorAll('[data-workload-status-filter], [data-workload-rag-filter], [data-workload-group-by]').forEach((select) => { select.value = ''; });
     applyWorkloadTaskFilters(personId);
     return;
   }

@@ -21,6 +21,14 @@ ON CONFLICT (person_id) DO UPDATE SET
   department = EXCLUDED.department,
   position_title = EXCLUDED.position_title;
 INSERT INTO people (person_id, employee_code, display_name, email, department, position_title, person_status)
+VALUES ('72d468b8-f025-4209-a189-3b1ccb47b67d', 'Blue001', 'Bluesea Vendor', 'arunee@blueseas.co.th', 'Bluesea', 'Bluesea', 'Active')
+ON CONFLICT (person_id) DO UPDATE SET
+  employee_code = EXCLUDED.employee_code,
+  display_name = EXCLUDED.display_name,
+  email = EXCLUDED.email,
+  department = EXCLUDED.department,
+  position_title = EXCLUDED.position_title;
+INSERT INTO people (person_id, employee_code, display_name, email, department, position_title, person_status)
 VALUES ('9b16c1a5-b13d-4457-9b03-473f66d65809', '009183', 'Chanyawan', 'Chanyawan.sit@mahidol.ac.th', 'งานสารสนเทศเพื่อการบริหาร', '', 'Active')
 ON CONFLICT (person_id) DO UPDATE SET
   employee_code = EXCLUDED.employee_code,
@@ -70,6 +78,14 @@ ON CONFLICT (person_id) DO UPDATE SET
   position_title = EXCLUDED.position_title;
 INSERT INTO people (person_id, employee_code, display_name, email, department, position_title, person_status)
 VALUES ('ce4f9d8e-0f9d-4db3-9a75-61cf3cfcdd50', '005423', 'Sakonan', 'Sakonan.hun@mahidol.ac.th', 'งานสารสนเทศเพื่อการบริหาร', 'หัวหน้างานสารสนเทศเพื่อการบริหาร', 'Active')
+ON CONFLICT (person_id) DO UPDATE SET
+  employee_code = EXCLUDED.employee_code,
+  display_name = EXCLUDED.display_name,
+  email = EXCLUDED.email,
+  department = EXCLUDED.department,
+  position_title = EXCLUDED.position_title;
+INSERT INTO people (person_id, employee_code, display_name, email, department, position_title, person_status)
+VALUES ('318cc4ab-cea3-473e-bc4c-26e01a5609e0', '008487', 'Teeraporn', 'Teeraporn.kam@mahidol.ac.th', 'งานสารสนเทศเพื่อการบริหาร', 'Business Analyst', 'Active')
 ON CONFLICT (person_id) DO UPDATE SET
   employee_code = EXCLUDED.employee_code,
   display_name = EXCLUDED.display_name,
@@ -191,7 +207,7 @@ INSERT INTO project_members (project_member_id, project_id, person_id, project_r
 VALUES ('a1d920b7-e71c-4b32-9c27-540358d21e69', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '20000000-0000-0000-0000-000000000001', 'PM', false, NULL, NULL)
 ON CONFLICT (project_member_id) DO NOTHING;
 INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
-VALUES ('cf9426f5-090f-429c-9815-c1aec2680484', '30000000-0000-0000-0000-000000000001', '9b16c1a5-b13d-4457-9b03-473f66d65809', 'BA', false, NULL, NULL)
+VALUES ('cf9426f5-090f-429c-9815-c1aec2680484', '30000000-0000-0000-0000-000000000001', '9b16c1a5-b13d-4457-9b03-473f66d65809', 'TeamMember', false, NULL, NULL)
 ON CONFLICT (project_member_id) DO NOTHING;
 INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
 VALUES ('b4080e7d-9bf8-49ad-84bd-31ab4f4fc4b8', '30000000-0000-0000-0000-000000000001', '054c6fc2-baf5-479a-a7f8-56676abc5bf5', 'PM', false, NULL, NULL)
@@ -215,13 +231,40 @@ INSERT INTO project_members (project_member_id, project_id, person_id, project_r
 VALUES ('e7b4c08a-92bf-4d86-9362-1048b2aa6f20', 'ca8b768a-7194-4b7c-bf7c-67fead04c378', '20000000-0000-0000-0000-000000000001', 'PM', false, NULL, NULL)
 ON CONFLICT (project_member_id) DO NOTHING;
 INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
-VALUES ('44baa0e9-351c-4299-91e4-111a04840e36', '30000000-0000-0000-0000-000000000001', 'e755fbfb-cf55-4ab9-b17f-382dadf72913', 'BA', false, NULL, NULL)
+VALUES ('44baa0e9-351c-4299-91e4-111a04840e36', '30000000-0000-0000-0000-000000000001', 'e755fbfb-cf55-4ab9-b17f-382dadf72913', 'TeamMember', false, NULL, NULL)
 ON CONFLICT (project_member_id) DO NOTHING;
 INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
-VALUES ('15eeb7f9-6211-4b63-b8ce-306a6d323ddc', '30000000-0000-0000-0000-000000000001', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'BA', false, NULL, NULL)
+VALUES ('15eeb7f9-6211-4b63-b8ce-306a6d323ddc', '30000000-0000-0000-0000-000000000001', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'TeamMember', false, NULL, NULL)
 ON CONFLICT (project_member_id) DO NOTHING;
 INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
-VALUES ('61c1af64-ab17-4b9f-b74d-e50794a1bdc9', '30000000-0000-0000-0000-000000000001', '84ef2811-dd6c-4349-ac7c-6ea87f15b0b6', 'BA', false, NULL, NULL)
+VALUES ('61c1af64-ab17-4b9f-b74d-e50794a1bdc9', '30000000-0000-0000-0000-000000000001', '84ef2811-dd6c-4349-ac7c-6ea87f15b0b6', 'TeamMember', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('16f29e5c-82da-4c3b-b1e3-ef5728ddcedf', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'TeamMember', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('1cdc197f-401a-4858-aa5b-42de62826ab7', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '84ef2811-dd6c-4349-ac7c-6ea87f15b0b6', 'TeamMember', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('6f1588c5-80b9-4063-aa29-83868861dad2', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '9b16c1a5-b13d-4457-9b03-473f66d65809', 'TeamMember', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('60fc73d0-5184-4a00-ad46-6d1b29cd68b2', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '20000000-0000-0000-0000-000000000002', 'TeamMember', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('5a91b411-69e2-4d85-86a9-16fb01cfc6e9', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'e755fbfb-cf55-4ab9-b17f-382dadf72913', 'TeamMember', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('7d2101d3-6a7f-4b0b-a3f5-955dcf7ae160', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '054c6fc2-baf5-479a-a7f8-56676abc5bf5', 'TeamMember', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('6bbc9f3e-ddf5-4aed-ade9-d00a87a607cf', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'ce4f9d8e-0f9d-4db3-9a75-61cf3cfcdd50', 'TeamMember', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('b49c508a-da57-4b10-a8c2-74579020e0f6', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '72d468b8-f025-4209-a189-3b1ccb47b67d', 'DEVLead', false, NULL, NULL)
+ON CONFLICT (project_member_id) DO NOTHING;
+INSERT INTO project_members (project_member_id, project_id, person_id, project_role, is_main_pm, active_from, active_to)
+VALUES ('634c869a-b04b-42af-ac3e-0123be7c4d92', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '318cc4ab-cea3-473e-bc4c-26e01a5609e0', 'TeamMember', false, NULL, NULL)
 ON CONFLICT (project_member_id) DO NOTHING;
 
 -- 4. Project Phases
@@ -525,7 +568,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('96f5cf85-376c-444e-a759-8448fc507863', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-006', 'MainTask', 'Reports', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('96f5cf85-376c-444e-a759-8448fc507863', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-006', 'MainTask', 'Reports', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -545,7 +588,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('df997935-6b13-4253-8bd4-ba6f7ea65bba', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-007', 'MainTask', 'Change Requests', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
+VALUES ('df997935-6b13-4253-8bd4-ba6f7ea65bba', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-007', 'MainTask', 'Change Requests', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -565,7 +608,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-009', 'MainTask', 'Requirement', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-009', 'MainTask', 'Requirement', NULL, '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -585,7 +628,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('9f929c0e-310b-45b2-bbe1-49ea0ad995f8', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'bf410ad9-40f4-46f2-905c-09de75fd34fe', NULL, 'EDOC-012', 'MainTask', 'Team Member', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('9f929c0e-310b-45b2-bbe1-49ea0ad995f8', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'bf410ad9-40f4-46f2-905c-09de75fd34fe', NULL, 'EDOC-012', 'MainTask', 'Team Member', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -605,7 +648,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('29669b5a-3374-449d-ad55-d3462dae9fa9', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'bf410ad9-40f4-46f2-905c-09de75fd34fe', NULL, 'EDOC-013', 'MainTask', 'คณะทำงาน', NULL, '20000000-0000-0000-0000-000000000001', '2025-12-16', '2025-12-16', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('29669b5a-3374-449d-ad55-d3462dae9fa9', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'bf410ad9-40f4-46f2-905c-09de75fd34fe', NULL, 'EDOC-013', 'MainTask', 'คณะทำงาน', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2025-12-16', '2025-12-16', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -625,7 +668,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('e8f89389-cb9d-4357-934d-42704a412e37', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-015', 'MainTask', 'Digital Signature', NULL, '20000000-0000-0000-0000-000000000001', '2026-05-03', '2026-06-29', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('e8f89389-cb9d-4357-934d-42704a412e37', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-015', 'MainTask', 'Digital Signature', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-05-03', '2026-06-29', NULL, NULL, 'InProgress', 'Amber', 1, 75, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -645,7 +688,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('34690ad2-44fd-4049-b71f-e18ef6c39b61', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-019', 'MainTask', 'APIs', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
+VALUES ('34690ad2-44fd-4049-b71f-e18ef6c39b61', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-019', 'MainTask', 'APIs', NULL, '318cc4ab-cea3-473e-bc4c-26e01a5609e0', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -665,7 +708,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('3a37d06b-edfd-422f-917a-4a7dd6ac436b', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-020', 'MainTask', 'ระบบจัดเก็บเอกสาร', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
+VALUES ('3a37d06b-edfd-422f-917a-4a7dd6ac436b', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-020', 'MainTask', 'ระบบจัดเก็บเอกสาร', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -685,7 +728,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('258fa107-9965-4654-a519-12e88b6985ec', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-021', 'MainTask', 'Web Portal', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('258fa107-9965-4654-a519-12e88b6985ec', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-021', 'MainTask', 'Web Portal', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -705,7 +748,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('0f13f76f-0693-40e1-a5da-b3447c196972', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-022', 'MainTask', 'การเชื่อมต่อข้อมูลกับ SAP', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('0f13f76f-0693-40e1-a5da-b3447c196972', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-022', 'MainTask', 'การเชื่อมต่อข้อมูลกับ SAP', NULL, '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -725,7 +768,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('f19c4d74-95a6-40cc-a8cd-e0e1bbe87492', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'bf410ad9-40f4-46f2-905c-09de75fd34fe', NULL, 'EDOC-026', 'MainTask', 'Kickoff Project', NULL, '20000000-0000-0000-0000-000000000001', '2026-01-29', '2026-01-29', NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
+VALUES ('f19c4d74-95a6-40cc-a8cd-e0e1bbe87492', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'bf410ad9-40f4-46f2-905c-09de75fd34fe', NULL, 'EDOC-026', 'MainTask', 'Kickoff Project', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-01-29', '2026-01-29', NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -745,7 +788,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('9ded7d86-63f1-4c03-b58b-20aacc6f7462', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'fab4d18d-3954-4061-90a5-6e7d6b5a36b2', NULL, 'EDOC-030', 'MainTask', 'Requirement', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('9ded7d86-63f1-4c03-b58b-20aacc6f7462', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'fab4d18d-3954-4061-90a5-6e7d6b5a36b2', NULL, 'EDOC-030', 'MainTask', 'Requirement', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -765,7 +808,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('1d702d6f-c69b-4f3a-86cc-8e855f0f9c02', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-034', 'MainTask', 'Mu-sis', NULL, '20000000-0000-0000-0000-000000000001', '2026-01-06', '2026-01-06', NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
+VALUES ('1d702d6f-c69b-4f3a-86cc-8e855f0f9c02', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-034', 'MainTask', 'Mu-sis', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-01-06', '2026-01-06', NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -785,7 +828,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('fe2d5601-4bc0-45f1-80d8-5af28dc29a23', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-036', 'MainTask', 'Reports', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('fe2d5601-4bc0-45f1-80d8-5af28dc29a23', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-036', 'MainTask', 'Reports', NULL, '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -805,7 +848,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('c64c8721-08d1-49c4-a803-a4fb784b69fe', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-037', 'MainTask', 'ISO 9001:2015', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('c64c8721-08d1-49c4-a803-a4fb784b69fe', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-037', 'MainTask', 'ISO 9001:2015', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'InProgress', 'Amber', 1, 25, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -825,7 +868,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('35e8a389-5624-46c3-9ce3-3f6c55582319', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-038', 'MainTask', 'ISO อื่นๆ', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('35e8a389-5624-46c3-9ce3-3f6c55582319', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-038', 'MainTask', 'ISO อื่นๆ', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -845,7 +888,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('fb337921-de65-4b7f-a18b-e6c0d31bd9db', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-041', 'MainTask', 'Requirement', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('fb337921-de65-4b7f-a18b-e6c0d31bd9db', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-041', 'MainTask', 'Requirement', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -865,7 +908,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('2e44ed6f-040d-44a8-b8c2-a313318710d2', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-042', 'MainTask', 'SIT', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('2e44ed6f-040d-44a8-b8c2-a313318710d2', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-042', 'MainTask', 'SIT', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -885,7 +928,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('3e3e04bf-67d0-406e-9054-d14605184f6a', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-043', 'MainTask', 'UAT', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('3e3e04bf-67d0-406e-9054-d14605184f6a', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-043', 'MainTask', 'UAT', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -905,7 +948,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('89db308d-ac51-4d47-ada0-25ef1f9ac464', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-044', 'MainTask', 'Golive', NULL, '20000000-0000-0000-0000-000000000001', '2026-08-30', '2026-08-30', NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('89db308d-ac51-4d47-ada0-25ef1f9ac464', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-044', 'MainTask', 'Golive', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-08-30', '2026-08-30', NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -925,7 +968,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('1c50c07b-bf80-4157-9507-f40a4d3c215e', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-045', 'MainTask', 'Business Requirement', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('1c50c07b-bf80-4157-9507-f40a4d3c215e', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-045', 'MainTask', 'Business Requirement', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -945,7 +988,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('9b78890c-9db7-4777-83bf-f6a3781a28c8', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-048', 'MainTask', 'SIT', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('9b78890c-9db7-4777-83bf-f6a3781a28c8', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-048', 'MainTask', 'SIT', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 90, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -965,7 +1008,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('8930374f-3985-4919-ad0d-ca37d86b0fcb', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-049', 'MainTask', 'UAT', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('8930374f-3985-4919-ad0d-ca37d86b0fcb', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-049', 'MainTask', 'UAT', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -985,7 +1028,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('336eba7d-cf3d-4a1b-8dbc-41688e1e445d', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-050', 'MainTask', 'Go-live', NULL, '20000000-0000-0000-0000-000000000001', '2026-08-31', '2026-09-29', NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('336eba7d-cf3d-4a1b-8dbc-41688e1e445d', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-050', 'MainTask', 'Go-live', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-08-31', '2026-09-29', NULL, NULL, 'InProgress', 'Green', 1, 20, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1025,7 +1068,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('2eefb7b7-5cb6-4e14-b492-ef571fb7e930', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-052', 'MainTask', 'Trainging', NULL, '20000000-0000-0000-0000-000000000001', '2026-08-16', '2026-08-20', NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('2eefb7b7-5cb6-4e14-b492-ef571fb7e930', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', NULL, 'EDOC-052', 'MainTask', 'Trainging', NULL, '20000000-0000-0000-0000-000000000001', '2026-08-16', '2026-08-20', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1045,7 +1088,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('8a583e20-0540-472d-9c46-747bb0f5b7f7', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-053', 'MainTask', 'Development (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('8a583e20-0540-472d-9c46-747bb0f5b7f7', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-053', 'MainTask', 'Development (1)', NULL, '72d468b8-f025-4209-a189-3b1ccb47b67d', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1065,7 +1108,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('f618fae0-e089-481f-807b-c9f6d03ffa38', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-054', 'MainTask', 'SIT (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('f618fae0-e089-481f-807b-c9f6d03ffa38', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-054', 'MainTask', 'SIT (1)', NULL, '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1085,7 +1128,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('17f7dfbd-0a91-4940-a566-2b3f75e9114f', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-055', 'MainTask', 'UAT (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('17f7dfbd-0a91-4940-a566-2b3f75e9114f', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-055', 'MainTask', 'UAT (1)', NULL, '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1105,7 +1148,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('82175c67-96ab-4b23-a966-de6b488f2673', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-056', 'MainTask', 'Trainging (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('82175c67-96ab-4b23-a966-de6b488f2673', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-056', 'MainTask', 'Trainging (1)', NULL, '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1125,7 +1168,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('b5ac7868-998d-4f5b-8390-90207b82bb62', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-057', 'MainTask', 'Go-live (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('b5ac7868-998d-4f5b-8390-90207b82bb62', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', NULL, 'EDOC-057', 'MainTask', 'Go-live (1)', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1145,7 +1188,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('24511c2c-0c51-4da1-bb33-674e441a334e', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-059', 'MainTask', 'สารบรรณ', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('24511c2c-0c51-4da1-bb33-674e441a334e', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-059', 'MainTask', 'สารบรรณ', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1165,7 +1208,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('a9c9b521-c8c4-4ee2-b2d7-d79956753525', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-060', 'MainTask', 'พัสดุ', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('a9c9b521-c8c4-4ee2-b2d7-d79956753525', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-060', 'MainTask', 'พัสดุ', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1185,7 +1228,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('65b5815d-94ea-4267-b733-fa77d84543ba', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-061', 'MainTask', 'Requirement', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('65b5815d-94ea-4267-b733-fa77d84543ba', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-061', 'MainTask', 'Requirement', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1205,7 +1248,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('a9bae895-091c-497e-9e00-a85a563bc323', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-062', 'MainTask', 'Development', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('a9bae895-091c-497e-9e00-a85a563bc323', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-062', 'MainTask', 'Development', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1225,7 +1268,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('8f4b124b-eebd-4439-a078-7ee7c9c8d8a7', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-063', 'MainTask', 'Test', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('8f4b124b-eebd-4439-a078-7ee7c9c8d8a7', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-063', 'MainTask', 'Test', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1245,7 +1288,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('d41fbeec-472a-4be2-a5c4-456645f58e72', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-064', 'MainTask', 'Go-live', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('d41fbeec-472a-4be2-a5c4-456645f58e72', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-064', 'MainTask', 'Go-live', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1265,7 +1308,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('815c0891-5506-42c6-870f-bb40c668bb4f', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-065', 'MainTask', 'Requirement (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('815c0891-5506-42c6-870f-bb40c668bb4f', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-065', 'MainTask', 'Requirement (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1285,7 +1328,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('3c993e37-aa63-4153-8105-e2ab2bcf436a', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-066', 'MainTask', 'Development (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('3c993e37-aa63-4153-8105-e2ab2bcf436a', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-066', 'MainTask', 'Development (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1305,7 +1348,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('1c293771-498d-4791-ad2b-de2f9543388e', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-067', 'MainTask', 'Test (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('1c293771-498d-4791-ad2b-de2f9543388e', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-067', 'MainTask', 'Test (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1325,7 +1368,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('506babe8-664f-46f1-aade-461d52576c01', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-068', 'MainTask', 'Go-live (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('506babe8-664f-46f1-aade-461d52576c01', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '472a5fbd-481c-4747-adf0-744be6892895', NULL, 'EDOC-068', 'MainTask', 'Go-live (1)', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Cancelled', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1345,7 +1388,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('4cd41491-00ed-4f26-bfce-d5db503f4f1c', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-004', 'Task', 'Change request', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Amber', 1, 0, false, NULL)
+VALUES ('4cd41491-00ed-4f26-bfce-d5db503f4f1c', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-004', 'Task', 'Change request', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'InProgress', 'Amber', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1365,7 +1408,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('1568bc81-f71f-40b7-80b1-e5df2c7dcc6e', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-010', 'Task', 'Bug Fixing', NULL, '20000000-0000-0000-0000-000000000001', '2025-09-07', '2025-09-07', NULL, NULL, 'InProgress', 'Amber', 1, 0, false, NULL)
+VALUES ('1568bc81-f71f-40b7-80b1-e5df2c7dcc6e', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-010', 'Task', 'Bug Fixing', NULL, '20000000-0000-0000-0000-000000000002', '2025-09-07', '2025-09-07', NULL, NULL, 'InProgress', 'Amber', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1385,7 +1428,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('7610f115-66bf-4dd9-a1df-708708e2e047', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-014', 'Task', 'Report', NULL, '20000000-0000-0000-0000-000000000001', NULL, '2026-08-31', NULL, NULL, 'InProgress', 'Green', 1, 100, false, NULL)
+VALUES ('7610f115-66bf-4dd9-a1df-708708e2e047', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-014', 'Task', 'Report', NULL, '20000000-0000-0000-0000-000000000002', NULL, '2026-08-31', NULL, NULL, 'InProgress', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1405,7 +1448,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('f813c2eb-ac7f-4b25-a4a5-9fef01d7eae3', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', 'EDOC-016', 'Task', 'PDF editor', NULL, '20000000-0000-0000-0000-000000000001', NULL, '2026-05-01', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('f813c2eb-ac7f-4b25-a4a5-9fef01d7eae3', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', 'EDOC-016', 'Task', 'PDF editor', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, '2026-05-01', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1425,7 +1468,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('196ebf9b-d00d-4a1a-8d51-15a12890da75', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', 'EDOC-017', 'Task', 'กระบวนการส่งหนังสือ', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
+VALUES ('196ebf9b-d00d-4a1a-8d51-15a12890da75', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', 'EDOC-017', 'Task', 'กระบวนการส่งหนังสือ', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1445,7 +1488,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('0a5107a7-0dc4-4a24-bf62-624638bac90c', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', 'EDOC-018', 'Task', 'กระบวนการรับหนังสือ', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Amber', 1, 0, false, NULL)
+VALUES ('0a5107a7-0dc4-4a24-bf62-624638bac90c', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', 'EDOC-018', 'Task', 'กระบวนการรับหนังสือ', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1465,7 +1508,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('7958b609-243c-4f61-bdff-2e1c75afdba2', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'e8f89389-cb9d-4357-934d-42704a412e37', 'EDOC-023', 'Task', 'Preparation', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
+VALUES ('7958b609-243c-4f61-bdff-2e1c75afdba2', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'e8f89389-cb9d-4357-934d-42704a412e37', 'EDOC-023', 'Task', 'Preparation', NULL, '9b16c1a5-b13d-4457-9b03-473f66d65809', NULL, NULL, NULL, NULL, 'Done', 'Amber', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1485,7 +1528,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('1e5b694a-bf42-4b6c-afd5-b943cf9db3ee', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'e8f89389-cb9d-4357-934d-42704a412e37', 'EDOC-024', 'Task', 'Implement', NULL, '20000000-0000-0000-0000-000000000001', '2026-04-30', '2026-06-29', NULL, NULL, 'InProgress', 'Amber', 1, 0, false, NULL)
+VALUES ('1e5b694a-bf42-4b6c-afd5-b943cf9db3ee', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'e8f89389-cb9d-4357-934d-42704a412e37', 'EDOC-024', 'Task', 'Implement', NULL, '9b16c1a5-b13d-4457-9b03-473f66d65809', '2026-04-30', '2026-06-29', NULL, NULL, 'InProgress', 'Amber', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1505,7 +1548,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('68ac22d8-ce11-47c0-969e-9c0b69b104a1', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', 'EDOC-025', 'Task', 'UI', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('68ac22d8-ce11-47c0-969e-9c0b69b104a1', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', 'EDOC-025', 'Task', 'UI', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1525,7 +1568,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('714b5ec7-90d2-41de-b324-4403068ea8b6', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', '34690ad2-44fd-4049-b71f-e18ef6c39b61', 'EDOC-027', 'Task', 'Requirement', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('714b5ec7-90d2-41de-b324-4403068ea8b6', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', '34690ad2-44fd-4049-b71f-e18ef6c39b61', 'EDOC-027', 'Task', 'Requirement', NULL, '318cc4ab-cea3-473e-bc4c-26e01a5609e0', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1545,7 +1588,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('a5eb9ec1-30e0-485e-8b7b-b8c4752aad91', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', '34690ad2-44fd-4049-b71f-e18ef6c39b61', 'EDOC-028', 'Task', 'Test', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('a5eb9ec1-30e0-485e-8b7b-b8c4752aad91', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', '34690ad2-44fd-4049-b71f-e18ef6c39b61', 'EDOC-028', 'Task', 'Test', NULL, '318cc4ab-cea3-473e-bc4c-26e01a5609e0', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1565,7 +1608,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('4a817790-89ab-4ecf-9eca-0fbbb29bb220', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'fab4d18d-3954-4061-90a5-6e7d6b5a36b2', '9ded7d86-63f1-4c03-b58b-20aacc6f7462', 'EDOC-031', 'Task', 'Prototype', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('4a817790-89ab-4ecf-9eca-0fbbb29bb220', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'fab4d18d-3954-4061-90a5-6e7d6b5a36b2', '9ded7d86-63f1-4c03-b58b-20aacc6f7462', 'EDOC-031', 'Task', 'Prototype', NULL, 'e755fbfb-cf55-4ab9-b17f-382dadf72913', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1585,7 +1628,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('3f6d866b-fa4f-4fc2-962e-c79a9d8b71dc', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'fab4d18d-3954-4061-90a5-6e7d6b5a36b2', '9ded7d86-63f1-4c03-b58b-20aacc6f7462', 'EDOC-032', 'Task', 'System Design', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('3f6d866b-fa4f-4fc2-962e-c79a9d8b71dc', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'fab4d18d-3954-4061-90a5-6e7d6b5a36b2', '9ded7d86-63f1-4c03-b58b-20aacc6f7462', 'EDOC-032', 'Task', 'System Design', NULL, 'e755fbfb-cf55-4ab9-b17f-382dadf72913', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1605,7 +1648,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('323509d4-d793-493b-995b-a08acd3bd8bf', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-033', 'Task', 'Implement  เลขหนังสือใหม่ (หน่วยงานใหม่)', NULL, '20000000-0000-0000-0000-000000000001', '2026-01-04', '2026-03-30', NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('323509d4-d793-493b-995b-a08acd3bd8bf', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-033', 'Task', 'Implement  เลขหนังสือใหม่ (หน่วยงานใหม่)', NULL, '20000000-0000-0000-0000-000000000002', '2026-01-04', '2026-03-30', NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1625,7 +1668,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('a99c5772-c479-411a-9394-386ae808b276', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', '3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', 'EDOC-035', 'Task', 'Stakeholder หลัก', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'InProgress', 'Green', 1, 0, false, NULL)
+VALUES ('a99c5772-c479-411a-9394-386ae808b276', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', '3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', 'EDOC-035', 'Task', 'Stakeholder หลัก', NULL, '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1645,7 +1688,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('8a9a232e-5d0f-4bf0-a873-b2b0660ea10b', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', '35e8a389-5624-46c3-9ce3-3f6c55582319', 'EDOC-039', 'Task', 'Requirement', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 100, false, NULL)
+VALUES ('8a9a232e-5d0f-4bf0-a873-b2b0660ea10b', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', '35e8a389-5624-46c3-9ce3-3f6c55582319', 'EDOC-039', 'Task', 'Requirement', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1665,7 +1708,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('a2373c35-92fe-4494-9b79-bec59a38c06a', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', '3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', 'EDOC-040', 'Task', 'Stakeholder 13 หน่วยงาน', NULL, '20000000-0000-0000-0000-000000000001', NULL, NULL, NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('a2373c35-92fe-4494-9b79-bec59a38c06a', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', 'a62c04de-3a6a-44bf-a3b2-36114f9c19e0', '3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', 'EDOC-040', 'Task', 'Stakeholder 11 หน่วยงาน', NULL, '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1685,7 +1728,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('1647e64d-b7fe-46c0-b4b2-eccb84e9f95f', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', '1c50c07b-bf80-4157-9507-f40a4d3c215e', 'EDOC-046', 'Task', 'BRD review', NULL, '20000000-0000-0000-0000-000000000001', '2026-06-30', '2026-06-30', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('1647e64d-b7fe-46c0-b4b2-eccb84e9f95f', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', '1c50c07b-bf80-4157-9507-f40a4d3c215e', 'EDOC-046', 'Task', 'BRD review', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-06-30', '2026-06-30', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -1705,7 +1748,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('a0d41adf-4440-42ce-8648-5864080a842f', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', '1c50c07b-bf80-4157-9507-f40a4d3c215e', 'EDOC-047', 'Task', 'BRD Approve', NULL, '20000000-0000-0000-0000-000000000001', '2026-08-02', '2026-08-02', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
+VALUES ('a0d41adf-4440-42ce-8648-5864080a842f', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '1c4321b2-49b1-48be-be24-7e13bb6473c4', '1c50c07b-bf80-4157-9507-f40a4d3c215e', 'EDOC-047', 'Task', 'BRD Approve', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-08-02', '2026-08-02', NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -2045,7 +2088,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('39a0c9ab-9bf8-4f0b-98aa-e7f6d6e7504f', '30000000-0000-0000-0000-000000000001', 'ade45e8a-7025-45cc-952b-e72bddae8861', NULL, 'RRMS-FND-01', 'MainTask', 'บริหาร หมุดหมาย ของทุนวิจัย (Milestone)', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-08-01', '2026-10-31', NULL, NULL, 'InProgress', 'Red', 2.86, 27, true, NULL)
+VALUES ('39a0c9ab-9bf8-4f0b-98aa-e7f6d6e7504f', '30000000-0000-0000-0000-000000000001', 'ade45e8a-7025-45cc-952b-e72bddae8861', NULL, 'RRMS-FND-01', 'MainTask', 'บริหาร หมุดหมาย ของทุนวิจัย (Milestone)', NULL, '84ef2811-dd6c-4349-ac7c-6ea87f15b0b6', '2026-08-01', '2026-10-31', NULL, NULL, 'InProgress', 'Red', 2.86, 27, true, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -2627,7 +2670,7 @@ ON CONFLICT (task_id) DO UPDATE SET
 
 -- 7. Task Assignments
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('9330c5a9-58c4-46f8-9166-f7a65f253ac3', '50000000-0000-0000-0000-000000000101', '20000000-0000-0000-0000-000000000001', 'BA', 'Accountable', true)
+VALUES ('9330c5a9-58c4-46f8-9166-f7a65f253ac3', '50000000-0000-0000-0000-000000000101', '20000000-0000-0000-0000-000000000001', 'Contributor', 'Accountable', true)
 ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
 VALUES ('5ee83dd7-e9a9-41e4-9b8c-d903deed8ef5', '50000000-0000-0000-0000-000000000102', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
@@ -2636,97 +2679,10 @@ INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment
 VALUES ('623d1a0d-9ef3-46e9-9845-095a74afb55a', '50000000-0000-0000-0000-000000000103', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
 ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('24d3cf2f-369e-4fd6-885d-309ce1bef4fc', '96f5cf85-376c-444e-a759-8448fc507863', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('a5aaeb8b-3248-4cbb-969a-dec566485441', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('faba317f-44ef-4bef-9d07-18ea836f143e', '3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('3dd9532c-a306-4f20-83a4-39a94329f748', '9f929c0e-310b-45b2-bbe1-49ea0ad995f8', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('03ea9c21-15aa-4ea4-b756-976cf05a51fc', '29669b5a-3374-449d-ad55-d3462dae9fa9', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('bb2bc3dd-2d9c-4b49-95dd-97ac88682aac', 'e8f89389-cb9d-4357-934d-42704a412e37', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('fcc76578-4bc1-4953-b475-0db58f55323b', '34690ad2-44fd-4049-b71f-e18ef6c39b61', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('d45dd3cc-aa1d-43ba-ab9d-76a79cba4d55', '3a37d06b-edfd-422f-917a-4a7dd6ac436b', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('a9749db0-4967-4035-9302-9f25b5ce457f', '258fa107-9965-4654-a519-12e88b6985ec', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('f78bfc11-3477-4574-a8c3-0f76f807d1b7', '0f13f76f-0693-40e1-a5da-b3447c196972', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('73acb3c7-cc83-4dd7-8c0a-f4ac23f9176f', 'f19c4d74-95a6-40cc-a8cd-e0e1bbe87492', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('21076457-e56b-4c36-8230-2ac9b0158dc5', '9ded7d86-63f1-4c03-b58b-20aacc6f7462', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('f37de77b-8c35-40a1-b7d1-4568d0e71736', '1d702d6f-c69b-4f3a-86cc-8e855f0f9c02', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('bb2a844b-1ecc-4e46-ac40-9d1c20d01b1a', 'fe2d5601-4bc0-45f1-80d8-5af28dc29a23', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('dd783359-de0a-4833-9a94-e0406eada479', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('b7de24d9-caf0-47b4-a56c-bb0a8f041712', '35e8a389-5624-46c3-9ce3-3f6c55582319', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('b23f8fe1-5530-49e7-a57e-86e2bb81cf8a', 'fb337921-de65-4b7f-a18b-e6c0d31bd9db', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('c92dbd8d-68c1-49fb-bd34-2cce84d4a4c1', '2e44ed6f-040d-44a8-b8c2-a313318710d2', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('6bbac299-180b-489c-a988-ead6f380770c', '3e3e04bf-67d0-406e-9054-d14605184f6a', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('e3eefee7-a080-4ed7-ae0c-94c40fa6c01f', '89db308d-ac51-4d47-ada0-25ef1f9ac464', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('f4498f6a-1555-45eb-a6eb-37a0836b02c9', '1c50c07b-bf80-4157-9507-f40a4d3c215e', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('a04059a0-d109-4587-83f0-22588dc9c3a1', '9b78890c-9db7-4777-83bf-f6a3781a28c8', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('3a96a906-d436-4727-8dea-057011307f32', '8930374f-3985-4919-ad0d-ca37d86b0fcb', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('c1a3c7df-4d7f-4f42-afc2-b96354813b64', '336eba7d-cf3d-4a1b-8dbc-41688e1e445d', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
 VALUES ('ae400e63-c1dd-4743-912d-3d7ff161c920', 'b091875c-cc19-4448-8987-22830f884933', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
 ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
 VALUES ('4cab4471-4de1-45a4-84e1-df38ad4ad854', '2eefb7b7-5cb6-4e14-b492-ef571fb7e930', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('c9de9434-c3bc-41a7-a38b-28cca1142eb2', '8a583e20-0540-472d-9c46-747bb0f5b7f7', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('211798c9-05d2-4d1c-90d6-35cdda3caef9', 'f618fae0-e089-481f-807b-c9f6d03ffa38', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('b6cafdd6-d973-441b-8423-102416a65fd5', '17f7dfbd-0a91-4940-a566-2b3f75e9114f', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('1daa33a9-8f26-4498-a116-ce4e35fd9ae2', '82175c67-96ab-4b23-a966-de6b488f2673', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('66208938-8567-4b8c-88d0-130ecb4b4fc9', 'b5ac7868-998d-4f5b-8390-90207b82bb62', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
 ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
 VALUES ('a7337178-959b-46a7-b4fd-6473cbc0bea3', '24511c2c-0c51-4da1-bb33-674e441a334e', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
@@ -2759,61 +2715,7 @@ INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment
 VALUES ('50d28387-af87-461e-b328-472cffdaee16', '506babe8-664f-46f1-aade-461d52576c01', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
 ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('fe60c549-f45d-4d13-bf7e-43dbd33f9995', '4cd41491-00ed-4f26-bfce-d5db503f4f1c', '20000000-0000-0000-0000-000000000001', 'BA', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('7110634c-1cf9-405f-9351-104d034c30d8', '1568bc81-f71f-40b7-80b1-e5df2c7dcc6e', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('52d5ea7b-428e-4a0c-8c86-91499ba06b73', '7610f115-66bf-4dd9-a1df-708708e2e047', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('dc69ed46-80d2-427a-a3a3-7f4954162486', 'f813c2eb-ac7f-4b25-a4a5-9fef01d7eae3', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('1e07bef5-c514-4170-88c9-ea528dc13111', '196ebf9b-d00d-4a1a-8d51-15a12890da75', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('37902040-6e5e-469c-b443-f0b2d531f1d4', '0a5107a7-0dc4-4a24-bf62-624638bac90c', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('20651f3f-568b-4148-a54f-b4ebb1d4ac01', '7958b609-243c-4f61-bdff-2e1c75afdba2', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('b7975abe-2b6e-40b9-a7d7-dbd9ac33ad9a', '1e5b694a-bf42-4b6c-afd5-b943cf9db3ee', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('68a46c93-7bc4-4ba0-bcb6-ea0089debc01', '68ac22d8-ce11-47c0-969e-9c0b69b104a1', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('07d24bd0-1258-4129-b609-e33671845820', '714b5ec7-90d2-41de-b324-4403068ea8b6', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('a7dbd08a-2ae6-49c3-8b1d-5761304c091b', 'a5eb9ec1-30e0-485e-8b7b-b8c4752aad91', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('f06a179a-188b-4f20-b0f7-a8ac7bdee195', '4a817790-89ab-4ecf-9eca-0fbbb29bb220', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('75f981c8-f984-49d8-992e-047d4cd71034', '3f6d866b-fa4f-4fc2-962e-c79a9d8b71dc', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('55646a82-e3b4-48fa-9a61-af739aa8bdec', '323509d4-d793-493b-995b-a08acd3bd8bf', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('a07678cc-b92c-4432-bcc2-15b5d4f14668', 'a99c5772-c479-411a-9394-386ae808b276', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('97841061-0559-4981-ad53-95741c4bce33', '8a9a232e-5d0f-4bf0-a873-b2b0660ea10b', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('ce4b58a7-dcb5-488d-b6b4-970e44f643d3', 'a2373c35-92fe-4494-9b79-bec59a38c06a', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('63b0c5f5-c954-4e39-97a4-b9a2a8de243d', '1647e64d-b7fe-46c0-b4b2-eccb84e9f95f', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('b6c00669-1065-4c5c-b140-e2ffc63d376d', 'a0d41adf-4440-42ce-8648-5864080a842f', '20000000-0000-0000-0000-000000000001', 'Owner', 'Accountable', true)
+VALUES ('fe60c549-f45d-4d13-bf7e-43dbd33f9995', '4cd41491-00ed-4f26-bfce-d5db503f4f1c', '20000000-0000-0000-0000-000000000001', 'Contributor', 'Accountable', true)
 ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
 VALUES ('1f40f718-e5fb-402b-b0f2-930db60068ad', '6814f572-73e7-4be6-9798-39e9e0125832', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
@@ -2950,6 +2852,150 @@ ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
 VALUES ('5b7c019a-e9bb-4950-8aec-c2306511e020', 'c07649a6-763d-4e48-823f-06b312ba6ae2', '84ef2811-dd6c-4349-ac7c-6ea87f15b0b6', 'Owner', 'Accountable', true)
 ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('9a63fe6e-f782-40db-b9f8-dacdf31d9aab', '4cd41491-00ed-4f26-bfce-d5db503f4f1c', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('8be9ea5d-15a8-422b-8e64-885d798733d1', '96f5cf85-376c-444e-a759-8448fc507863', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('2bd3decb-dd86-4226-b00d-a9013beaa6a3', 'df997935-6b13-4253-8bd4-ba6f7ea65bba', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('8dbf738b-8f0f-4bd6-95c9-8f7c71ca44a2', '3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('9a4ce2e7-c48f-4c89-aa85-a011c3060cda', '1568bc81-f71f-40b7-80b1-e5df2c7dcc6e', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('4c9a02c3-9872-4f2e-a706-7afb5dd8d23e', '9f929c0e-310b-45b2-bbe1-49ea0ad995f8', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('e7107c4b-caa2-4ece-b19e-0835701209d2', '29669b5a-3374-449d-ad55-d3462dae9fa9', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('bc59e8ef-e8ee-4b17-8d5f-0a272554fe65', '7610f115-66bf-4dd9-a1df-708708e2e047', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('9e8ede6a-9ff3-4cf4-bde9-728908d01bd4', 'e8f89389-cb9d-4357-934d-42704a412e37', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('ec503225-0d75-4ae2-aa93-ff211f9e63c8', 'f813c2eb-ac7f-4b25-a4a5-9fef01d7eae3', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('35c3fe9d-4dc0-48c8-a57b-4a93208c3fc2', '196ebf9b-d00d-4a1a-8d51-15a12890da75', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('96dcc1bc-0f27-44a5-afeb-f1c67cd71f5f', '0a5107a7-0dc4-4a24-bf62-624638bac90c', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('d362f100-5962-4806-a5cf-334a27acb507', '34690ad2-44fd-4049-b71f-e18ef6c39b61', '318cc4ab-cea3-473e-bc4c-26e01a5609e0', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('0cc98068-3efd-407b-826c-f1c2b3fb3017', '3a37d06b-edfd-422f-917a-4a7dd6ac436b', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('e2485800-c38f-459e-8c62-fd06c42d08bd', '258fa107-9965-4654-a519-12e88b6985ec', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('59a58a39-a31b-4ed1-82a6-7e81150d0cdb', '0f13f76f-0693-40e1-a5da-b3447c196972', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('b2e81983-6c88-40ce-a24f-12e6e0db1ca0', '7958b609-243c-4f61-bdff-2e1c75afdba2', '9b16c1a5-b13d-4457-9b03-473f66d65809', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('95de3e87-fc89-4a26-b352-6f5efb570a01', '1e5b694a-bf42-4b6c-afd5-b943cf9db3ee', '9b16c1a5-b13d-4457-9b03-473f66d65809', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('8a9b1f27-6347-4e55-afb7-d0dee1180387', '68ac22d8-ce11-47c0-969e-9c0b69b104a1', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('3021a281-06c0-44db-96b2-d6a6c1b5881b', 'f19c4d74-95a6-40cc-a8cd-e0e1bbe87492', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('71e4ee89-611b-4bc1-bee3-23c6b10445b8', '714b5ec7-90d2-41de-b324-4403068ea8b6', '318cc4ab-cea3-473e-bc4c-26e01a5609e0', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('5ac1de17-0214-4a32-9a10-27da0626ca61', 'a5eb9ec1-30e0-485e-8b7b-b8c4752aad91', '318cc4ab-cea3-473e-bc4c-26e01a5609e0', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('b78e8658-8a61-4d3d-bfc4-047e7fe0d200', '9ded7d86-63f1-4c03-b58b-20aacc6f7462', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('b287c526-4aa9-42b6-9762-4d45f6cfcbbb', '4a817790-89ab-4ecf-9eca-0fbbb29bb220', 'e755fbfb-cf55-4ab9-b17f-382dadf72913', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('78dbf04e-e12e-4a1a-b7d6-da8323314b38', '3f6d866b-fa4f-4fc2-962e-c79a9d8b71dc', 'e755fbfb-cf55-4ab9-b17f-382dadf72913', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('f3bb4f3f-41a5-42a6-a178-dbdf0adac5ff', '323509d4-d793-493b-995b-a08acd3bd8bf', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('4b520b76-a6e5-4d68-bfdd-c04aea81ec12', '1d702d6f-c69b-4f3a-86cc-8e855f0f9c02', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('2bbe0249-b694-4c09-9ae8-cccc5608362a', 'a99c5772-c479-411a-9394-386ae808b276', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('d9eab283-baff-4484-a280-e322c350a581', 'fe2d5601-4bc0-45f1-80d8-5af28dc29a23', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('72667efb-adb0-403e-9d97-170f2d7fe071', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('352d9655-31d7-4fef-b895-784ff46cf137', '35e8a389-5624-46c3-9ce3-3f6c55582319', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('5af9bdf1-981e-43fb-8e00-df1c0945f84b', '8a9a232e-5d0f-4bf0-a873-b2b0660ea10b', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('276454f4-c418-44e0-9304-2f24741715ef', 'a2373c35-92fe-4494-9b79-bec59a38c06a', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('b076fe0b-fee0-412e-97c4-936b1ab82674', 'fb337921-de65-4b7f-a18b-e6c0d31bd9db', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('9a914d2c-949f-44a0-b0c4-8082f558adc6', '2e44ed6f-040d-44a8-b8c2-a313318710d2', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('ca5c3d03-8f80-4875-a7d6-5d9756ea41e7', '3e3e04bf-67d0-406e-9054-d14605184f6a', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('cd347d7a-4abb-44f5-bd41-127d15112260', '89db308d-ac51-4d47-ada0-25ef1f9ac464', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('74ef739a-8db5-47cf-8a91-0fb109baf686', '1c50c07b-bf80-4157-9507-f40a4d3c215e', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('6064a501-fc03-473f-8ad8-fe2e4b19418c', '1647e64d-b7fe-46c0-b4b2-eccb84e9f95f', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('0f17c24d-1797-4bed-8085-cb5dda4045a6', 'a0d41adf-4440-42ce-8648-5864080a842f', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('9d7c3a91-a365-42f1-aba0-f3a889a365c1', '9b78890c-9db7-4777-83bf-f6a3781a28c8', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('c5f99882-49d8-4dbd-ba62-6eba3311afa5', '8930374f-3985-4919-ad0d-ca37d86b0fcb', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('183369f2-103c-4b2c-8351-70ec46db662a', '336eba7d-cf3d-4a1b-8dbc-41688e1e445d', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('fc1c9a93-a3f4-4685-9d45-f2ae59d1b271', '8a583e20-0540-472d-9c46-747bb0f5b7f7', '72d468b8-f025-4209-a189-3b1ccb47b67d', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('44cabc11-99ac-4d69-beb0-0ae056340cbf', 'f618fae0-e089-481f-807b-c9f6d03ffa38', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('cc14c52c-33f2-47c7-ab99-3b60018a42d5', '17f7dfbd-0a91-4940-a566-2b3f75e9114f', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('9970d6ae-0688-45f4-b501-ba50da3ba379', '82175c67-96ab-4b23-a966-de6b488f2673', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
+INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
+VALUES ('cdb66038-1a26-4567-bca6-7f31c72076e4', 'b5ac7868-998d-4f5b-8390-90207b82bb62', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)
+ON CONFLICT (task_assignment_id) DO NOTHING;
 
 -- 8. Weekly Updates
 INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
@@ -2981,6 +3027,72 @@ VALUES ('f8285fc2-55e5-43e0-8f58-36c4a640508d', '7c160ff1-758e-48df-8212-29393f8
 ON CONFLICT (weekly_update_id) DO NOTHING;
 INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
 VALUES ('8edd79ac-d16b-4cad-972f-5042d996d5e3', 'c56f2a8b-b534-42f9-bff0-181e2db5ab73', '2026-08-31', 30, 'InProgress', 'Red', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('a0fd5c23-ed1f-4cf5-8669-2af62b7448a8', '0a5107a7-0dc4-4a24-bf62-624638bac90c', '2026-09-07', 100, 'Done', 'Amber', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('effe761d-1f00-4bd4-895d-777c66409896', '506babe8-664f-46f1-aade-461d52576c01', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('c106c661-5bd7-4d2f-abd9-032d88160a12', '1c293771-498d-4791-ad2b-de2f9543388e', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('3c8be012-32ea-4a08-bc2d-76d332722430', '3c993e37-aa63-4153-8105-e2ab2bcf436a', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('4dc990b7-d141-4471-a55d-9be0e330cfb4', '815c0891-5506-42c6-870f-bb40c668bb4f', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('eab73c33-637f-4785-939a-d67c8adac648', 'd41fbeec-472a-4be2-a5c4-456645f58e72', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('234c4fc0-6a56-49d4-9479-6d70946c54f5', '8f4b124b-eebd-4439-a078-7ee7c9c8d8a7', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('357c95e1-a1d6-49ff-86e4-f1af3919fca8', 'a9bae895-091c-497e-9e00-a85a563bc323', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('6fa0a896-0410-4ba1-8256-6227e2b1228f', '65b5815d-94ea-4267-b733-fa77d84543ba', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('6dce52db-ae3d-47a1-a465-568841e938b5', 'a9c9b521-c8c4-4ee2-b2d7-d79956753525', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('ecfb46a0-2851-43ca-b3e4-cce34e9b965e', '24511c2c-0c51-4da1-bb33-674e441a334e', '2026-09-07', 0, 'Cancelled', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('bb7d95eb-d7dd-46c7-b666-59dd717f11e7', 'a2373c35-92fe-4494-9b79-bec59a38c06a', '2026-09-07', 100, 'Done', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('19481145-283a-4bb7-b7f0-a9ed6ab0aeea', 'a99c5772-c479-411a-9394-386ae808b276', '2026-09-07', 100, 'Done', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('b3a4fa82-fcc7-4974-97b1-21fdaefd3d37', '3ed2f8b0-e5e1-49de-8936-fd7bb2d63b93', '2026-09-07', 80, 'InProgress', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('2bf7d307-be10-4432-9531-1565daea534d', '2eefb7b7-5cb6-4e14-b492-ef571fb7e930', '2026-09-07', 100, 'Done', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('b588075d-20b4-43dd-b451-e7ad177c8f0d', '336eba7d-cf3d-4a1b-8dbc-41688e1e445d', '2026-09-07', 20, 'InProgress', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('3792facf-22ae-4161-ace0-a40b2280f22c', '8930374f-3985-4919-ad0d-ca37d86b0fcb', '2026-09-07', 100, 'Done', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('e8890a38-42b6-424f-acec-f9da22e9a933', '9b78890c-9db7-4777-83bf-f6a3781a28c8', '2026-09-07', 90, 'InProgress', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('c91f6da1-e438-4b45-a725-216f20779334', 'a5eb9ec1-30e0-485e-8b7b-b8c4752aad91', '2026-09-07', 100, 'Done', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('98505d78-034f-47ab-a944-5ff82dd4009a', '714b5ec7-90d2-41de-b324-4403068ea8b6', '2026-09-07', 100, 'Done', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('2dfdae6e-671c-46fa-ac12-e4aaf5c17541', '34690ad2-44fd-4049-b71f-e18ef6c39b61', '2026-09-07', 100, 'Done', 'Green', '20000000-0000-0000-0000-000000000001')
+ON CONFLICT (weekly_update_id) DO NOTHING;
+INSERT INTO weekly_updates (weekly_update_id, task_id, week_start_date, progress, status, rag_status, submitted_by_person_id)
+VALUES ('d2d4ab7c-ba9a-46f6-9ae6-20298bef1d07', 'e8f89389-cb9d-4357-934d-42704a412e37', '2026-09-07', 75, 'InProgress', 'Amber', '20000000-0000-0000-0000-000000000001')
 ON CONFLICT (weekly_update_id) DO NOTHING;
 
 -- 9. Task Notes

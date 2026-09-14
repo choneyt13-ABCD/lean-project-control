@@ -524,6 +524,10 @@
 }
 .control-hero h2, .weekly-hero h2 { margin: 5px 0 4px; font-size: 25px; }
 .control-hero p, .weekly-hero p { margin: 0; color: var(--muted); }
+.workload-group-header td { padding: 10px 14px; background: #edf5eb; border-top: 2px solid #cfe0cc; }
+.workload-group-header span, .workload-group-header strong { display: block; }
+.workload-group-header span { color: #55705d; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.workload-group-header strong { margin-top: 2px; color: var(--green); font-size: 13px; }
 .week-control { display: flex; flex-direction: column; gap: 6px; min-width: 170px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .week-control input { background: white; font-size: 14px; text-transform: none; letter-spacing: normal; }
 .master-table td:first-child strong, .master-table td:first-child span, .table td small { display: block; }

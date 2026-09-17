@@ -697,6 +697,9 @@ test('updates work item progress, auto-syncs status/progress, rolls up to parent
   const tasks = await fetch(`${baseUrl}/api/tasks`).then((r) => r.json());
   assert.ok(tasks.every((t) => typeof t.note_count === 'number'));
 
+  const filteredUpdates = await fetch(`${baseUrl}/api/weekly-updates?taskId=${tasks[0].task_id}`).then((r) => r.json());
+  assert.ok(filteredUpdates.every((item) => item.task_id === tasks[0].task_id));
+
   const child = tasks.find((t) => t.parent_task_id);
   assert.ok(child, 'Child task should exist');
 
@@ -1144,5 +1147,4 @@ test('All Projects Workload: interaction contracts, grouping, and multi-filter c
     }
   }
 });
-
 

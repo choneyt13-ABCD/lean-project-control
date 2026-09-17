@@ -2562,9 +2562,13 @@ app.get('/api/master-control', async (request) => {
     planCount: plans.length, planDone: plans.filter((item) => item.status === 'Done').length, roleUpdateCount: roleUpdates.length } };
 });
 
-app.get('/api/weekly-updates', async (request) => db.prepare(`SELECT wu.*, t.task_name, p.display_name AS submitted_by_name
+app.get('/api/weekly-updates', async (request, reply) => {
+  const taskId = request.query?.taskId;
+  if (taskId && !projectTask(taskId, request.projectId)) return reply.code(422).send({ message: 'A task in the selected project is required.' });
+  return db.prepare(`SELECT wu.*, t.task_name, p.display_name AS submitted_by_name
   FROM weekly_updates wu JOIN tasks t ON t.task_id = wu.task_id JOIN people p ON p.person_id = wu.submitted_by_person_id
-  WHERE t.project_id = ? AND wu.deleted_at IS NULL ORDER BY wu.created_at DESC`).all(request.projectId));
+  WHERE t.project_id = ? AND wu.deleted_at IS NULL ${taskId ? 'AND wu.task_id = ?' : ''} ORDER BY wu.created_at DESC`).all(...(taskId ? [request.projectId, taskId] : [request.projectId]));
+});
 
 app.post('/api/weekly-updates', async (request, reply) => {
   const body = request.body || {};

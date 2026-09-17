@@ -352,7 +352,7 @@ async function workBreakdown() {
                   ${currentTaskGrouping !== 'status' ? `<td>${badge(task.status)}</td>` : ''}
                   <td>${badge(task.rag_status || 'Green')}</td>
                   <td><strong>${task.progress}%</strong></td>
-                  <td><div class="row-actions"><button data-update-task="${task.task_id}">Update</button><button data-open-task-notes="${task.task_id}">Notes${task.note_count ? ` (${task.note_count})` : ''}</button></div>${task.latest_note_text ? `<div class="latest-task-note" title="${escapeHtml(task.latest_note_text)}"><span>${escapeHtml(task.latest_note_type || 'Note')}</span>${escapeHtml(task.latest_note_text)}</div>` : ''}</td>
+                  <td><div class="row-actions"><button data-open-task-history="${task.task_id}">Update &amp; history${task.note_count ? ` (${task.note_count})` : ''}</button></div>${task.latest_note_text ? `<div class="latest-task-note" title="${escapeHtml(task.latest_note_text)}"><span>${escapeHtml(task.latest_note_type || 'Note')}</span>${escapeHtml(task.latest_note_text)}</div>` : ''}</td>
                     </tr>
                   `;
                 }).join('')}
@@ -944,6 +944,25 @@ async function taskNotesModal(task, editingNoteId = null) {
       taskNotesModal(task);
     } catch (error) { showToast(error.message); }
   };
+  modal.showModal();
+}
+
+async function taskHistoryModal(task) {
+  if (!task) return;
+  const [notes, updates] = await Promise.all([
+    api(`/task-notes?taskId=${encodeURIComponent(task.task_id)}`),
+    api(`/weekly-updates?taskId=${encodeURIComponent(task.task_id)}`)
+  ]);
+  const entries = [
+    ...notes.map((item) => ({ ...item, historyType: 'Note', date: item.updated_at || item.created_at })),
+    ...updates.map((item) => ({ ...item, historyType: 'Weekly update', date: item.updated_at || item.created_at }))
+  ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const history = entries.length ? entries.map((item) => {
+    const isNote = item.historyType === 'Note';
+    const body = isNote ? item.note_text : item.summary;
+    return `<article class="task-note-entry"><div class="task-note-meta">${badge(isNote ? item.note_type : 'Update')} <strong>${escapeHtml(isNote ? item.created_by_name : item.submitted_by_name)}</strong><span>${new Date(String(item.date).replace(' ', 'T') + 'Z').toLocaleString()}${item.updated_at !== item.created_at ? ' (edited)' : ''}</span><button class="secondary compact-btn" data-${isNote ? 'edit-task-note' : 'edit-weekly-update'}="${isNote ? item.task_note_id : item.weekly_update_id}">Edit</button></div><p>${escapeHtml(body || '')}</p>${!isNote && item.blocker ? `<small class="cell-note">Blocker: ${escapeHtml(item.blocker)}</small>` : ''}${!isNote && item.next_step ? `<small class="cell-note">Next: ${escapeHtml(item.next_step)}</small>` : ''}</article>`;
+  }).join('') : '<p class="empty">No updates or notes for this work item yet.</p>';
+  modalContent.innerHTML = `<h2 class="form-title">Update &amp; history</h2><p class="subtle"><strong>${escapeHtml(task.task_code)}</strong> — ${escapeHtml(task.task_name)}</p><div class="history-actions"><button class="secondary" data-open-task-update="${task.task_id}">+ Add update</button><button class="secondary" data-open-task-note-create="${task.task_id}">+ Add note</button></div><section class="task-note-history"><h3>History</h3>${history}</section><div class="actions"><button class="secondary" value="cancel">Close</button></div>`;
   modal.showModal();
 }
 
@@ -2467,6 +2486,12 @@ document.addEventListener('change', (event) => {
   }
 });
 document.addEventListener('click', (event) => {
+  const historyButton = event.target.closest('[data-open-task-history]');
+  if (historyButton) {
+    const task = tasks.find((item) => item.task_id === historyButton.dataset.openTaskHistory);
+    if (task) taskHistoryModal(task);
+    return;
+  }
   if (event.target.closest('[data-create-phase-from-unassigned]')) unassignedPhaseModal();
 });
 
@@ -2505,7 +2530,7 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
-  const target = event.target.closest('[data-go], .nav, [data-control-portal-session], [data-portal-session], [data-weekly-portal-session], [data-select-project], [data-open-project], [data-edit-project], [data-open-template-import], [data-open-activity], [data-open-task], [data-update-task], [data-add-task-child], [data-add-subtask-child], [data-add-task-to-wbs], [data-add-activity-to-phase], [data-open-update], [data-open-weekly-plan], [data-open-role-update], [data-open-raid], [data-open-person], [data-open-existing-person], [data-open-assignment], [data-edit-task], [data-edit-activity], [data-edit-update], [data-edit-plan], [data-edit-role], [data-edit-raid], [data-edit-person], [data-edit-assignment], [data-delete-task], [data-delete-activity], [data-delete-update], [data-delete-plan], [data-delete-role], [data-delete-raid], [data-delete-person], [data-delete-assignment], [data-group-toggle], [data-parent-toggle]');
+  const target = event.target.closest('[data-go], .nav, [data-control-portal-session], [data-portal-session], [data-weekly-portal-session], [data-select-project], [data-open-project], [data-edit-project], [data-open-template-import], [data-open-activity], [data-open-task], [data-update-task], [data-open-task-update], [data-open-task-note-create], [data-edit-weekly-update], [data-add-task-child], [data-add-subtask-child], [data-add-task-to-wbs], [data-add-activity-to-phase], [data-open-update], [data-open-weekly-plan], [data-open-role-update], [data-open-raid], [data-open-person], [data-open-existing-person], [data-open-assignment], [data-edit-task], [data-edit-activity], [data-edit-update], [data-edit-plan], [data-edit-role], [data-edit-raid], [data-edit-person], [data-edit-assignment], [data-delete-task], [data-delete-activity], [data-delete-update], [data-delete-plan], [data-delete-role], [data-delete-raid], [data-delete-person], [data-delete-assignment], [data-group-toggle], [data-parent-toggle]');
   if (!target) return;
   if (target.dataset.parentToggle) {
     const parentId = target.dataset.parentToggle;
@@ -2540,6 +2565,8 @@ document.addEventListener('click', async (event) => {
   if (target.dataset.addTaskToWbs) return openTaskModal({ wbsItemId: target.dataset.addTaskToWbs, taskType: 'MainTask' });
   if (target.dataset.addActivityToPhase) return activityModal(null, target.dataset.addActivityToPhase);
   if (target.dataset.updateTask) return taskProgressModal(tasks.find((task) => task.task_id === target.dataset.updateTask));
+  if (target.dataset.openTaskUpdate) return taskProgressModal(tasks.find((task) => task.task_id === target.dataset.openTaskUpdate));
+  if (target.dataset.openTaskNoteCreate) return taskNotesModal(tasks.find((task) => task.task_id === target.dataset.openTaskNoteCreate));
   if (target.matches('[data-open-activity]')) return activityModal();
   if (target.matches('[data-open-task]')) return openTaskModal();
   if (target.matches('[data-open-update]')) return weeklyModal();
@@ -2549,9 +2576,10 @@ document.addEventListener('click', async (event) => {
   if (target.matches('[data-open-person]')) return personModal();
   if (target.matches('[data-open-existing-person]')) return existingPeopleModal();
   if (target.matches('[data-open-assignment]')) return assignmentModal();
-  const edit = ['task', 'activity', 'update', 'plan', 'role', 'raid', 'person', 'assignment'].find((type) => target.dataset[`edit${type[0].toUpperCase()}${type.slice(1)}`] !== undefined);
+  const edit = ['task', 'activity', 'update', 'weeklyUpdate', 'plan', 'role', 'raid', 'person', 'assignment'].find((type) => target.dataset[`edit${type[0].toUpperCase()}${type.slice(1)}`] !== undefined);
   if (edit) {
     const id = target.dataset[`edit${edit[0].toUpperCase()}${edit.slice(1)}`];
+    if (edit === 'weeklyUpdate') return api('/weekly-updates').then((items) => weeklyModal(items.find((item) => item.weekly_update_id === id)));
     if (edit === 'activity') return api('/wbs').then((items) => activityModal(items.find((item) => item.wbs_item_id === id)));
     const collections = { task: tasks, update: weeklyItems, plan: weeklyPlans, role: roleUpdates, raid: raidItems, person: peopleItems, assignment: assignmentItems };
     const idKey = {

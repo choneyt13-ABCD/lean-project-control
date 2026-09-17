@@ -67,7 +67,7 @@ const actions = (type, id, noteCount = 0, item = null) => {
       : isTask
       ? `<button class="secondary compact-btn" data-add-subtask-child="${id}" title="Add Subtask under this Task">+ Subtask</button>`
       : '';
-    return `<span class="row-actions">${addBtn}<button data-open-task-notes="${id}">Notes${noteCount > 0 ? ` (${noteCount})` : ''}</button><button data-edit-task="${id}">Edit</button><button class="danger" data-delete-task="${id}">Delete</button></span>`;
+    return `<span class="row-actions">${addBtn}<button data-edit-task="${id}">Edit</button><button class="danger" data-delete-task="${id}">Delete</button></span>`;
   }
   return `<span class="row-actions"><button data-edit-${type}="${id}">Edit</button><button class="danger" data-delete-${type}="${id}">Delete</button></span>`;
 };
@@ -352,7 +352,7 @@ async function workBreakdown() {
                   ${currentTaskGrouping !== 'status' ? `<td>${badge(task.status)}</td>` : ''}
                   <td>${badge(task.rag_status || 'Green')}</td>
                   <td><strong>${task.progress}%</strong></td>
-                  <td><div class="row-actions"><button data-open-task-history="${task.task_id}">Update &amp; history${task.note_count ? ` (${task.note_count})` : ''}</button></div>${task.latest_note_text ? `<div class="latest-task-note" title="${escapeHtml(task.latest_note_text)}"><span>${escapeHtml(task.latest_note_type || 'Note')}</span>${escapeHtml(task.latest_note_text)}</div>` : ''}</td>
+                  <td><div class="row-actions"><button data-open-task-history="${task.task_id}">Update &amp; history</button></div></td>
                     </tr>
                   `;
                 }).join('')}
@@ -953,14 +953,11 @@ async function taskHistoryModal(task) {
     api(`/task-notes?taskId=${encodeURIComponent(task.task_id)}`),
     api(`/weekly-updates?taskId=${encodeURIComponent(task.task_id)}`)
   ]);
-  const entries = [
-    ...notes.map((item) => ({ ...item, historyType: 'Note', date: item.updated_at || item.created_at })),
-    ...updates.map((item) => ({ ...item, historyType: 'Weekly update', date: item.updated_at || item.created_at }))
-  ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const entries = updates.map((item) => ({ ...item, historyType: 'Weekly update', date: item.updated_at || item.created_at,
+    attachments: notes.find((note) => note.note_type === 'Update' && note.note_text === item.summary)?.files || []
+  })).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const history = entries.length ? entries.map((item) => {
-    const isNote = item.historyType === 'Note';
-    const body = isNote ? item.note_text : item.summary;
-    return `<article class="task-note-entry"><div class="task-note-meta">${badge(isNote ? item.note_type : 'Update')} <strong>${escapeHtml(isNote ? item.created_by_name : item.submitted_by_name)}</strong><span>${new Date(String(item.date).replace(' ', 'T') + 'Z').toLocaleString()}${item.updated_at !== item.created_at ? ' (edited)' : ''}</span><button class="secondary compact-btn" data-${isNote ? 'edit-task-note' : 'edit-weekly-update'}="${isNote ? item.task_note_id : item.weekly_update_id}">Edit</button></div><p>${escapeHtml(body || '')}</p>${!isNote && item.blocker ? `<small class="cell-note">Blocker: ${escapeHtml(item.blocker)}</small>` : ''}${!isNote && item.next_step ? `<small class="cell-note">Next: ${escapeHtml(item.next_step)}</small>` : ''}</article>`;
+    return `<article class="task-note-entry"><div class="task-note-meta">${badge('Update')} <strong>${escapeHtml(item.submitted_by_name)}</strong><span>${new Date(String(item.date).replace(' ', 'T') + 'Z').toLocaleString()}${item.updated_at !== item.created_at ? ' (edited)' : ''}</span><button class="secondary compact-btn" data-edit-weekly-update="${item.weekly_update_id}">Edit</button></div><p>${escapeHtml(item.summary || '')}</p>${item.blocker ? `<small class="cell-note">Blocker: ${escapeHtml(item.blocker)}</small>` : ''}${item.next_step ? `<small class="cell-note">Next: ${escapeHtml(item.next_step)}</small>` : ''}${item.attachments.length ? `<div class="task-note-files">${item.attachments.flatMap((file) => `<button class="attachment-link" data-download-task-note-file="${file.task_note_file_id}">📎 ${escapeHtml(file.original_file_name)}</button>`).join('')}</div>` : ''}</article>`;
   }).join('') : '<p class="empty">No updates or notes for this work item yet.</p>';
   modalContent.innerHTML = `<h2 class="form-title">Update &amp; history</h2><p class="subtle"><strong>${escapeHtml(task.task_code)}</strong> — ${escapeHtml(task.task_name)}</p><div class="history-actions"><button class="secondary" data-open-task-update="${task.task_id}">+ Add update</button><button class="secondary" data-open-task-note-create="${task.task_id}">+ Add note</button></div><section class="task-note-history"><h3>History</h3>${history}</section><div class="actions"><button class="secondary" value="cancel">Close</button></div>`;
   modal.showModal();
@@ -1055,10 +1052,10 @@ async function weeklyModal(item) {
 
 function taskProgressModal(task) {
   if (!task) return;
-  modalContent.innerHTML = `<h2 class="form-title">Update work item</h2><p class="subtle"><strong>${task.task_code}</strong> — ${task.task_name}</p><div class="form-grid"><label>Week start<input name="weekStartDate" type="date" required value="${controlWeek}"></label><label>Status<select name="status">${statusOptions(task.status)}</select></label><label>RAG<select name="ragStatus">${ragOptions(task.rag_status || 'Green')}</select></label><label>Progress (%)<input name="progress" type="number" min="0" max="100" required value="${task.progress || 0}"></label><label class="full">What was completed / changed?<textarea name="summary" required maxlength="2000" placeholder="Progress, decision, or deliverable completed"></textarea></label><label class="full">Blocker<textarea name="blocker" placeholder="Optional"></textarea></label><label class="full">Next step<textarea name="nextStep" placeholder="Optional"></textarea></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save update</button></div>`;
+  modalContent.innerHTML = `<h2 class="form-title">Update work item</h2><p class="subtle"><strong>${task.task_code}</strong> — ${task.task_name}</p><div class="form-grid"><label>Week start<input name="weekStartDate" type="date" required value="${controlWeek}"></label><label>Status<select name="status">${statusOptions(task.status)}</select></label><label>RAG<select name="ragStatus">${ragOptions(task.rag_status || 'Green')}</select></label><label>Progress (%)<input name="progress" type="number" min="0" max="100" required value="${task.progress || 0}"></label><label class="full">What was completed / changed?<textarea name="summary" required maxlength="2000" placeholder="Progress, decision, or deliverable completed"></textarea></label><label class="full">Blocker<textarea name="blocker" placeholder="Optional"></textarea></label><label class="full">Next step<textarea name="nextStep" placeholder="Optional"></textarea></label><label class="full">Attachments <small>Up to 5 MB per file</small><input name="attachments" type="file" multiple></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save update</button></div>`;
   const statusSelect = form.elements.status; const progressInput = form.elements.progress;
   statusSelect.addEventListener('change', () => { if (statusSelect.value === 'Done') progressInput.value = '100'; else if (statusSelect.value === 'NotStarted') progressInput.value = '0'; });
-  form.onsubmit = async (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(form)); values.taskId = task.task_id; values.progress = Number(values.progress); values.summary = values.summary.trim(); try { await api('/weekly-updates', { method: 'POST', body: JSON.stringify(values) }); modal.close(); tasks = []; showToast('Work item update saved.'); navigate('tasks'); } catch (error) { showToast(error.message); } };
+  form.onsubmit = async (event) => { event.preventDefault(); const data = new FormData(form); const values = Object.fromEntries(data); const files = [...form.elements.attachments.files]; if (files.some((file) => file.size > 5 * 1024 * 1024)) return showToast('Each attachment must be 5 MB or smaller.'); values.taskId = task.task_id; values.progress = Number(values.progress); values.summary = values.summary.trim(); try { const result = await api('/weekly-updates', { method: 'POST', body: JSON.stringify(values) }); if (files.length) { const note = await api('/task-notes', { method: 'POST', body: JSON.stringify({ taskId: task.task_id, noteType: 'Update', noteText: values.summary }) }); for (const file of files) { const response = await fetch(`/api/task-notes/${note.taskNoteId}/files`, { method: 'PUT', headers: { ...(activeProjectId ? { 'x-project-id': activeProjectId } : {}), 'x-file-name': encodeURIComponent(file.name), 'x-file-type': file.type || 'application/octet-stream' }, body: file }); if (!response.ok) throw new Error('Unable to upload attachment.'); } } modal.close(); tasks = []; showToast('Work item update saved.'); navigate('tasks'); } catch (error) { showToast(error.message); } };
   modal.showModal();
 }
 

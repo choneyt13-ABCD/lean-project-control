@@ -9,6 +9,9 @@ const toast = document.querySelector('#toast');
 let activeProjectId = localStorage.getItem('lean_active_project_id') || null;
 let tasks = [];
 let activeTaskForNotes = null;
+let notificationItems = [];
+let notificationState = null;
+let notificationTimer = null;
 let weeklyItems = [];
 let weeklyPlans = [];
 let roleUpdates = [];
@@ -97,6 +100,51 @@ const mondayOf = (value = new Date()) => {
   return date.toISOString().slice(0, 10);
 };
 let controlWeek = localStorage.getItem('lean_control_week') || mondayOf();
+
+function notificationKey() { return `lean_update_notifications_${activeProjectId || 'default'}`; }
+function readNotificationState() {
+  try { return JSON.parse(localStorage.getItem(notificationKey()) || 'null'); } catch { return null; }
+}
+function isTaskUnread(taskId) { return Boolean(notificationState?.unreadIds?.some((id) => notificationItems.find((item) => item.weekly_update_id === id)?.task_id === taskId)); }
+function renderNotificationBadge() {
+  const nav = document.querySelector('.nav[data-page="tasks"]');
+  if (!nav) return;
+  let badgeEl = nav.querySelector('.nav-notification-badge');
+  const count = notificationState?.unreadIds?.length || 0;
+  if (!count) { badgeEl?.remove(); return; }
+  if (!badgeEl) { badgeEl = document.createElement('span'); badgeEl.className = 'nav-notification-badge'; nav.appendChild(badgeEl); }
+  badgeEl.textContent = count > 99 ? '99+' : String(count);
+}
+async function refreshUpdateNotifications() {
+  try {
+    const items = await api('/notifications/updates');
+    const previous = readNotificationState();
+    const currentIds = items.map((item) => item.weekly_update_id);
+    const initialized = previous?.initialized && previous.projectId === activeProjectId;
+    const unreadIds = initialized ? [...new Set([...(previous.unreadIds || []), ...currentIds.filter((id) => !(previous.knownIds || []).includes(id))])] : [];
+    notificationItems = items;
+    notificationState = { projectId: activeProjectId, initialized: true, knownIds: currentIds, unreadIds: unreadIds.filter((id) => currentIds.includes(id)) };
+    localStorage.setItem(notificationKey(), JSON.stringify(notificationState));
+    renderNotificationBadge();
+    document.querySelectorAll('[data-task-row-id]').forEach((row) => {
+      const taskId = row.dataset.taskRowId;
+      let label = row.querySelector('.new-update-label');
+      if (isTaskUnread(taskId) && !label) { label = document.createElement('span'); label.className = 'new-update-label'; label.textContent = 'New update'; row.querySelector('.task-title-wrap')?.appendChild(label); }
+      if (!isTaskUnread(taskId)) label?.remove();
+    });
+  } catch { /* notifications must not interrupt normal navigation */ }
+}
+function startNotificationPolling() {
+  if (notificationTimer) clearInterval(notificationTimer);
+  notificationTimer = setInterval(refreshUpdateNotifications, 30000);
+  refreshUpdateNotifications();
+}
+function markTaskUpdatesRead(taskId) {
+  if (!notificationState) return;
+  notificationState.unreadIds = (notificationState.unreadIds || []).filter((id) => notificationItems.find((item) => item.weekly_update_id === id)?.task_id !== taskId);
+  localStorage.setItem(notificationKey(), JSON.stringify(notificationState));
+  renderNotificationBadge();
+}
 
 async function projectContext() {
   const [current, projects] = await Promise.all([api('/project'), api('/portfolio')]);
@@ -238,6 +286,7 @@ function flattenTaskHierarchy(items, collapsedParents = new Set()) {
 
 async function workBreakdown() {
   const [{ current, projects }, workItems] = await Promise.all([projectContext(), api('/tasks')]);
+  await refreshUpdateNotifications();
   tasks = workItems;
   const groups = buildTaskGroups(tasks, currentTaskGrouping);
 
@@ -332,7 +381,7 @@ async function workBreakdown() {
                   const typeDisplay = task.task_type === 'MainTask' ? 'MAIN TASK' : task.task_type === 'Task' ? 'TASK' : 'SUBTASK';
 
                   return `
-                    <tr class="${isMain ? 'task-row-main' : 'task-row-child'}">
+                    <tr class="${isMain ? 'task-row-main' : 'task-row-child'}" data-task-row-id="${task.task_id}">
                       <td>
                         <div class="task-cell-content ${indentClass}">
                           ${toggleBtn}
@@ -342,7 +391,7 @@ async function workBreakdown() {
                               <span class="code inline-code">${task.task_code}</span>
                               ${task.hasChildren ? `<span class="subtask-count-tag">${task.childCount} sub-item${task.childCount > 1 ? 's' : ''}</span>` : ''}
                             </div>
-                            <strong>${task.task_name}</strong>
+                            <strong>${task.task_name}</strong>${isTaskUnread(task.task_id) ? '<span class="new-update-label">New update</span>' : ''}
                           </div>
                         </div>
                       </td>
@@ -953,6 +1002,7 @@ async function taskHistoryModal(task) {
     api(`/task-notes?taskId=${encodeURIComponent(task.task_id)}`),
     api(`/weekly-updates?taskId=${encodeURIComponent(task.task_id)}`)
   ]);
+  markTaskUpdatesRead(task.task_id);
   const entries = updates.map((item) => ({ ...item, historyType: 'Weekly update', date: item.updated_at || item.created_at,
     attachments: notes.find((note) => note.note_type === 'Update' && note.note_text === item.summary)?.files || []
   })).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -2708,6 +2758,7 @@ async function initialize() {
     const session = await api('/session');
     document.querySelector('.demo-user strong').textContent = session.displayName;
     document.querySelector('.demo-user small').textContent = `${session.roles.join(', ') || 'No role'} · local demo identity`;
+    startNotificationPolling();
     await navigate('dashboard');
   } catch (error) {
     content.innerHTML = `<section class="panel"><h2>Unable to start local session</h2><p class="subtle">${error.message}</p></section>`;

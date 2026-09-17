@@ -2570,6 +2570,10 @@ app.get('/api/weekly-updates', async (request, reply) => {
   WHERE t.project_id = ? AND wu.deleted_at IS NULL ${taskId ? 'AND wu.task_id = ?' : ''} ORDER BY wu.created_at DESC`).all(...(taskId ? [request.projectId, taskId] : [request.projectId]));
 });
 
+app.get('/api/notifications/updates', async (request) => db.prepare(`SELECT wu.weekly_update_id, wu.task_id, wu.updated_at, wu.created_at, t.task_code, t.task_name, wu.submitted_by_person_id
+  FROM weekly_updates wu JOIN tasks t ON t.task_id = wu.task_id
+  WHERE t.project_id = ? AND wu.deleted_at IS NULL ORDER BY wu.updated_at DESC LIMIT 200`).all(request.projectId));
+
 app.post('/api/weekly-updates', async (request, reply) => {
   const body = request.body || {};
   const summary = String(body.summary || '').trim();

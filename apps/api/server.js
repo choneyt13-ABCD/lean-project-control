@@ -857,7 +857,10 @@ function taskRows(scopedProjectId) {
     ph.phase_code, ph.phase_name,
     p.display_name AS owner_name,
     GROUP_CONCAT(a.display_name, ', ') AS assignees,
-    (SELECT COUNT(*) FROM task_notes tn WHERE tn.task_id = t.task_id AND tn.deleted_at IS NULL) AS note_count
+    (SELECT COUNT(*) FROM task_notes tn WHERE tn.task_id = t.task_id AND tn.deleted_at IS NULL) AS note_count,
+    (SELECT tn.note_text FROM task_notes tn WHERE tn.task_id = t.task_id AND tn.deleted_at IS NULL ORDER BY tn.updated_at DESC, tn.created_at DESC LIMIT 1) AS latest_note_text,
+    (SELECT tn.note_type FROM task_notes tn WHERE tn.task_id = t.task_id AND tn.deleted_at IS NULL ORDER BY tn.updated_at DESC, tn.created_at DESC LIMIT 1) AS latest_note_type,
+    (SELECT tn.updated_at FROM task_notes tn WHERE tn.task_id = t.task_id AND tn.deleted_at IS NULL ORDER BY tn.updated_at DESC, tn.created_at DESC LIMIT 1) AS latest_note_updated_at
     FROM tasks t JOIN wbs_items w ON w.wbs_item_id = t.wbs_item_id
     LEFT JOIN project_phases ph ON ph.phase_id = w.phase_id AND ph.deleted_at IS NULL
     JOIN people p ON p.person_id = t.owner_person_id
@@ -2311,6 +2314,23 @@ app.post('/api/task-notes', async (request, reply) => {
     audit('task_note.create', 'TaskNote', id, null, { taskId: body.taskId, noteType, noteText }, request.actor.person_id);
   })();
   return reply.code(201).send({ taskNoteId: id });
+});
+
+app.patch('/api/task-notes/:noteId', async (request, reply) => {
+  const before = projectTaskNote(request.params.noteId, request.projectId);
+  if (!before) return reply.code(404).send({ message: 'Task note not found.' });
+  const body = request.body || {};
+  const noteText = String(body.noteText ?? before.note_text).trim();
+  const noteType = body.noteType ?? before.note_type;
+  if (!noteText) return reply.code(422).send({ message: 'Note text is required.' });
+  if (!['Note', 'Update'].includes(noteType)) return reply.code(422).send({ message: 'Note type is invalid.' });
+  db.transaction(() => {
+    db.prepare('UPDATE task_notes SET note_type = ?, note_text = ?, updated_at = CURRENT_TIMESTAMP WHERE task_note_id = ?')
+      .run(noteType, noteText, before.task_note_id);
+    const after = db.prepare('SELECT * FROM task_notes WHERE task_note_id = ?').get(before.task_note_id);
+    audit('task_note.update', 'TaskNote', before.task_note_id, before, after, request.actor.person_id);
+  })();
+  return db.prepare('SELECT * FROM task_notes WHERE task_note_id = ?').get(before.task_note_id);
 });
 
 app.put('/api/task-notes/:noteId/files', async (request, reply) => {

@@ -392,6 +392,13 @@ test('records a task note, downloads its attachment, and rejects an oversized fi
   assert.equal(noteResponse.status, 201);
   const { taskNoteId } = await noteResponse.json();
 
+  const editResponse = await fetch(`${baseUrl}/api/task-notes/${taskNoteId}`, {
+    method: 'PATCH', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ noteType: 'Update', noteText: 'Edited attachment smoke test.' })
+  });
+  assert.equal(editResponse.status, 200);
+  assert.equal((await editResponse.json()).note_text, 'Edited attachment smoke test.');
+
   const uploadResponse = await fetch(`${baseUrl}/api/task-notes/${taskNoteId}/files`, {
     method: 'PUT', headers: { 'content-type': 'application/octet-stream', 'x-file-name': 'note.txt', 'x-file-type': 'text/plain' },
     body: new TextEncoder().encode('Task note attachment')
@@ -400,6 +407,8 @@ test('records a task note, downloads its attachment, and rejects an oversized fi
   const { taskNoteFileId } = await uploadResponse.json();
 
   const notes = await fetch(`${baseUrl}/api/task-notes?taskId=${task.task_id}`).then((response) => response.json());
+  assert.equal(notes[0].note_type, 'Update');
+  assert.equal(notes[0].note_text, 'Edited attachment smoke test.');
   assert.equal(notes[0].files[0].original_file_name, 'note.txt');
   const download = await fetch(`${baseUrl}/api/task-note-files/${taskNoteFileId}/download`);
   assert.equal(download.status, 200);
@@ -1135,6 +1144,5 @@ test('All Projects Workload: interaction contracts, grouping, and multi-filter c
     }
   }
 });
-
 
 

@@ -8,6 +8,7 @@ const toast = document.querySelector('#toast');
 
 let activeProjectId = localStorage.getItem('lean_active_project_id') || null;
 let tasks = [];
+let activeTaskForNotes = null;
 let weeklyItems = [];
 let weeklyPlans = [];
 let roleUpdates = [];
@@ -348,10 +349,10 @@ async function workBreakdown() {
                       ${currentTaskGrouping !== 'workstream' ? `<td>${task.workstream ? `<span class="workstream-pill">${task.workstream}</span>` : '<span class="subtle">—</span>'}</td>` : ''}
                       ${currentTaskGrouping !== 'activity' ? `<td><span class="type-pill wbs-pill">WBS</span> <span class="code inline-code">${task.wbs_code}</span> ${task.wbs_name}</td>` : ''}
                       ${currentTaskGrouping !== 'owner' ? `<td>${task.owner_name}</td>` : ''}
-                      ${currentTaskGrouping !== 'status' ? `<td>${badge(task.status)}</td>` : ''}
-                      <td>${badge(task.rag_status || 'Green')}</td>
-                      <td><strong>${task.progress}%</strong></td>
-                      <td><div class="row-actions"><button data-update-task="${task.task_id}">Update</button><button data-open-task-notes="${task.task_id}">Notes</button></div></td>
+                  ${currentTaskGrouping !== 'status' ? `<td>${badge(task.status)}</td>` : ''}
+                  <td>${badge(task.rag_status || 'Green')}</td>
+                  <td><strong>${task.progress}%</strong></td>
+                  <td><div class="row-actions"><button data-update-task="${task.task_id}">Update</button><button data-open-task-notes="${task.task_id}">Notes${task.note_count ? ` (${task.note_count})` : ''}</button></div>${task.latest_note_text ? `<div class="latest-task-note" title="${escapeHtml(task.latest_note_text)}"><span>${escapeHtml(task.latest_note_type || 'Note')}</span>${escapeHtml(task.latest_note_text)}</div>` : ''}</td>
                     </tr>
                   `;
                 }).join('')}
@@ -918,23 +919,28 @@ function workstreamModal(workstream) {
   modal.showModal();
 }
 
-async function taskNotesModal(task) {
+async function taskNotesModal(task, editingNoteId = null) {
+  activeTaskForNotes = task;
   const notes = await api(`/task-notes?taskId=${encodeURIComponent(task.task_id)}`);
+  const editingNote = notes.find((note) => note.task_note_id === editingNoteId);
   const formatSize = (bytes) => bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
-  const history = notes.length ? notes.map((note) => `<article class="task-note-entry"><div class="task-note-meta">${badge(note.note_type)} <strong>${note.created_by_name}</strong><span>${new Date(note.created_at.replace(' ', 'T') + 'Z').toLocaleString()}</span></div><p>${note.note_text}</p>${note.files.length ? `<div class="task-note-files">${note.files.map((file) => `<button class="attachment-link" data-download-task-note-file="${file.task_note_file_id}">📎 ${file.original_file_name} <small>${formatSize(file.file_size_bytes)}</small></button>`).join('')}</div>` : ''}</article>`).join('') : '<p class="empty">No notes or updates for this work item yet.</p>';
-  modalContent.innerHTML = `<h2 class="form-title">Notes & updates</h2><p class="subtle"><strong>${task.task_code}</strong> — ${task.task_name}</p><div class="form-grid"><label>Entry type<select name="noteType"><option value="Note">Note</option><option value="Update">Update</option></select></label><label class="full">Note / update<textarea name="noteText" required placeholder="Record the decision, progress, blocker, or next action."></textarea></label><label class="full">Attachments <small>Up to 5 MB per file</small><input name="attachments" type="file" multiple></label></div><div class="actions"><button class="secondary" value="cancel">Close</button><button class="primary">Save note</button></div><section class="task-note-history"><h3>History</h3>${history}</section>`;
+  const history = notes.length ? notes.map((note) => `<article class="task-note-entry"><div class="task-note-meta">${badge(note.note_type)} <strong>${escapeHtml(note.created_by_name)}</strong><span>${new Date(note.updated_at.replace(' ', 'T') + 'Z').toLocaleString()}${note.updated_at !== note.created_at ? ' (edited)' : ''}</span><button class="secondary compact-btn" data-edit-task-note="${note.task_note_id}">Edit</button></div><p>${escapeHtml(note.note_text)}</p>${note.files.length ? `<div class="task-note-files">${note.files.map((file) => `<button class="attachment-link" data-download-task-note-file="${file.task_note_file_id}">📎 ${escapeHtml(file.original_file_name)} <small>${formatSize(file.file_size_bytes)}</small></button>`).join('')}</div>` : ''}</article>`).join('') : '<p class="empty">No notes or updates for this work item yet.</p>';
+  modalContent.innerHTML = `<h2 class="form-title">Notes & updates</h2><p class="subtle"><strong>${escapeHtml(task.task_code)}</strong> — ${escapeHtml(task.task_name)}</p><div class="form-grid"><label>Entry type<select name="noteType"><option value="Note" ${selected(editingNote?.note_type || 'Note', 'Note')}>Note</option><option value="Update" ${selected(editingNote?.note_type || 'Note', 'Update')}>Update</option></select></label><label class="full">Note / update<textarea name="noteText" required placeholder="Record the decision, progress, blocker, or next action.">${editingNote ? escapeHtml(editingNote.note_text) : ''}</textarea></label>${editingNote ? '<p class="subtle full">Attachments remain unchanged when editing a note.</p>' : '<label class="full">Attachments <small>Up to 5 MB per file</small><input name="attachments" type="file" multiple></label>'}</div><div class="actions"><button class="secondary" value="cancel">Close</button><button class="primary">${editingNote ? 'Save changes' : 'Save note'}</button></div><section class="task-note-history"><h3>History</h3>${history}</section>`;
   form.onsubmit = async (event) => {
     event.preventDefault();
     const data = new FormData(form);
-    const files = [...form.elements.attachments.files];
+    const files = editingNote ? [] : [...form.elements.attachments.files];
     if (files.some((file) => file.size > 5 * 1024 * 1024)) return showToast('Each attachment must be 5 MB or smaller.');
     try {
-      const result = await api('/task-notes', { method: 'POST', body: JSON.stringify({ taskId: task.task_id, noteType: data.get('noteType'), noteText: data.get('noteText') }) });
+      const result = editingNote
+        ? await api(`/task-notes/${editingNote.task_note_id}`, { method: 'PATCH', body: JSON.stringify({ noteType: data.get('noteType'), noteText: data.get('noteText') }) })
+        : await api('/task-notes', { method: 'POST', body: JSON.stringify({ taskId: task.task_id, noteType: data.get('noteType'), noteText: data.get('noteText') }) });
       for (const file of files) {
         const response = await fetch(`/api/task-notes/${result.taskNoteId}/files`, { method: 'PUT', headers: { ...(activeProjectId ? { 'x-project-id': activeProjectId } : {}), 'x-file-name': encodeURIComponent(file.name), 'x-file-type': file.type || 'application/octet-stream' }, body: file });
         if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Unable to upload attachment.'); }
       }
-      showToast('Task note saved.');
+      tasks = [];
+      showToast(editingNote ? 'Task note updated.' : 'Task note saved.');
       taskNotesModal(task);
     } catch (error) { showToast(error.message); }
   };
@@ -2492,6 +2498,10 @@ document.addEventListener('click', (event) => {
   }
   const downloadButton = event.target.closest('[data-download-task-note-file]');
   if (downloadButton) downloadTaskNoteFile(downloadButton.dataset.downloadTaskNoteFile);
+  const editNoteButton = event.target.closest('[data-edit-task-note]');
+  if (editNoteButton) {
+    if (activeTaskForNotes) taskNotesModal(activeTaskForNotes, editNoteButton.dataset.editTaskNote);
+  }
 });
 
 document.addEventListener('click', async (event) => {

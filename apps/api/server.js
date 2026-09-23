@@ -1622,6 +1622,7 @@ app.get('/api/workload/all-projects', async (request) => {
   // 1. Fetch active projects
   const projects = db.prepare(`
     SELECT p.project_id, p.project_code, p.project_name, p.portfolio_name, p.project_status, p.rag_status,
+      p.project_type, p.project_size, p.start_date, p.target_end_date,
       p.main_pm_person_id, owner.display_name AS main_pm_name
     FROM projects p
     LEFT JOIN people owner ON owner.person_id = p.main_pm_person_id
@@ -1879,6 +1880,12 @@ app.get('/api/workload/all-projects', async (request) => {
         wbs_code: t.wbs_code,
         wbsName: t.wbs_name,
         wbs_name: t.wbs_name,
+        phaseId: t.phase_id,
+        phase_id: t.phase_id,
+        phaseCode: t.phase_code,
+        phase_code: t.phase_code,
+        phaseName: t.phase_name,
+        phase_name: t.phase_name,
         assignmentRole,
         assignment_role: assignmentRole,
         isOwner,
@@ -1991,6 +1998,14 @@ app.get('/api/workload/all-projects', async (request) => {
       portfolioName: proj.portfolio_name,
       projectStatus: proj.project_status,
       ragStatus: proj.rag_status,
+      projectType: proj.project_type,
+      projectSize: proj.project_size,
+      startDate: proj.start_date,
+      start_date: proj.start_date,
+      targetEndDate: proj.target_end_date,
+      target_end_date: proj.target_end_date,
+      mainPmPersonId: proj.main_pm_person_id,
+      main_pm_person_id: proj.main_pm_person_id,
       mainPmName: proj.main_pm_name,
       totalOpen: projTotalOpen,
       total: projTotalOpen,

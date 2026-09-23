@@ -4,6 +4,47 @@ main,
 
 .timeline-panel { overflow: hidden; }
 
+.timeline-portfolio-context {
+  align-items: flex-end;
+}
+
+.timeline-executive-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr)) auto;
+  align-items: end;
+  gap: 8px;
+  min-width: min(100%, 650px);
+}
+
+.timeline-executive-filters label {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.timeline-executive-filters select {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 5px;
+  padding: 7px 28px 7px 9px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.timeline-executive-filters select:disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+  background: #f3f5f2;
+}
+
+.timeline-executive-filters button { min-height: 38px; }
+
 .timeline-head {
   align-items: flex-start;
   gap: 18px;
@@ -309,6 +350,11 @@ main,
     white-space: normal;
   }
   .timeline-head { align-items: stretch; flex-direction: column; }
+  .timeline-portfolio-context { align-items: stretch; }
+  .timeline-executive-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+  }
   .timeline-modes { justify-content: flex-start; }
   .timeline-axis-row,
   .timeline-row { grid-template-columns: 185px var(--timeline-width); }
@@ -319,6 +365,7 @@ main,
 @media (max-width: 560px) {
   .control-portal-nav .portal-tabs { grid-template-columns: 1fr; }
   .timeline-modes button { flex: 1 1 100%; }
+  .timeline-executive-filters { grid-template-columns: 1fr; }
   .timeline-axis-row,
   .timeline-row { grid-template-columns: 150px var(--timeline-width); }
   .timeline-chart { width: calc(150px + var(--timeline-width)); }

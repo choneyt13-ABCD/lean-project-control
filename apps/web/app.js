@@ -20,6 +20,8 @@ let peopleItems = [];
 let assignmentItems = [];
 let controlPortalSession = localStorage.getItem('lean_control_portal_session') || 'portfolio';
 let timelineMode = localStorage.getItem('lean_timeline_mode') || 'delivery';
+let timelineExecutivePm = localStorage.getItem('lean_timeline_executive_pm') || '';
+let timelineExecutiveProject = localStorage.getItem('lean_timeline_executive_project') || '';
 let portalSession = localStorage.getItem('lean_portal_session') || 'setup';
 let weeklyPortalSession = localStorage.getItem('lean_weekly_portal_session') || 'weekly';
 let currentTaskGrouping = localStorage.getItem('lean_task_grouping') || 'activity';
@@ -2392,12 +2394,22 @@ async function allProjectsWorkloadView() {
 }
 
 async function timelineView() {
-  const [{ current, projects }, phases, workItems] = await Promise.all([
-    projectContext(),
-    api('/phases'),
-    api('/tasks')
-  ]);
   if (!['executive', 'delivery', 'attention'].includes(timelineMode)) timelineMode = 'delivery';
+  const isExecutive = timelineMode === 'executive';
+  let current = null;
+  let projects = [];
+  let phases = [];
+  let workItems = [];
+  let portfolioTimeline = null;
+  if (isExecutive) {
+    portfolioTimeline = await api('/workload/all-projects?includeDone=true');
+  } else {
+    [{ current, projects }, phases, workItems] = await Promise.all([
+      projectContext(),
+      api('/phases'),
+      api('/tasks')
+    ]);
+  }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -2423,13 +2435,6 @@ async function timelineView() {
     if (items.length && items.every((item) => parseDate(item.planned_start_date) > today)) return 'future';
     return 'active';
   };
-  const phaseGroups = phases.map((phase) => ({
-    phase,
-    items: workItems.filter((item) => item.phase_id === phase.phase_id)
-  }));
-  const unassignedItems = workItems.filter((item) => !item.phase_id || !phases.some((phase) => phase.phase_id === item.phase_id));
-  if (unassignedItems.length) phaseGroups.push({ phase: { phase_id: 'unassigned', phase_code: 'NO PHASE', phase_name: 'Unassigned phase', sort_order: 9999 }, items: unassignedItems });
-
   const aggregatePhase = ({ phase, items }) => {
     const starts = [phase.planned_start_date, ...items.map((item) => item.planned_start_date)].filter(Boolean).sort();
     const ends = [phase.planned_due_date, ...items.map((item) => item.planned_due_date)].filter(Boolean).sort();
@@ -2487,15 +2492,108 @@ async function timelineView() {
 
   let rows = [];
   let viewDescription = '';
-  if (timelineMode === 'executive') {
-    rows = phaseGroups.map(aggregatePhase);
-    viewDescription = 'A · Phase-level roadmap for steering and executive review.';
+  let timelineContext = '';
+  let executiveProjectsShown = [];
+  if (isExecutive) {
+    const rawProjects = portfolioTimeline.projectAggregates || [];
+    const portfolioProjects = rawProjects.map((project) => ({
+      ...project,
+      project_id: project.projectId || project.project_id,
+      project_code: project.projectCode || project.project_code,
+      project_name: project.projectName || project.project_name,
+      portfolio_name: project.portfolioName || project.portfolio_name,
+      project_type: project.projectType || project.project_type,
+      project_size: project.projectSize || project.project_size,
+      start_date: project.startDate || project.start_date,
+      target_end_date: project.targetEndDate || project.target_end_date,
+      main_pm_person_id: project.mainPmPersonId || project.main_pm_person_id,
+      main_pm_name: project.mainPmName || project.main_pm_name || 'Unassigned PM',
+      rag_status: project.ragStatus || project.rag_status,
+      progress: Number(project.avgProgress ?? project.avg_progress ?? 0)
+    }));
+    const portfolioTaskMap = new Map();
+    (portfolioTimeline.taskDetailRecords || []).forEach((task) => {
+      const taskId = task.taskId || task.task_id;
+      if (!taskId || portfolioTaskMap.has(taskId)) return;
+      portfolioTaskMap.set(taskId, {
+        task_id: taskId,
+        project_id: task.projectId || task.project_id,
+        task_code: task.taskCode || task.task_code,
+        task_name: task.taskName || task.task_name,
+        task_type: task.taskType || task.task_type,
+        status: task.status,
+        rag_status: task.ragStatus || task.rag_status,
+        progress: Number(task.progress || 0),
+        planned_start_date: task.plannedStartDate || task.planned_start_date,
+        planned_due_date: task.plannedDueDate || task.planned_due_date,
+        phase_id: task.phaseId || task.phase_id,
+        phase_code: task.phaseCode || task.phase_code,
+        phase_name: task.phaseName || task.phase_name
+      });
+    });
+    const portfolioTasks = [...portfolioTaskMap.values()];
+    const pmOptions = [...new Map(portfolioProjects.map((project) => [project.main_pm_person_id || project.main_pm_name, {
+      id: project.main_pm_person_id || project.main_pm_name,
+      name: project.main_pm_name
+    }])).values()].sort((left, right) => left.name.localeCompare(right.name));
+    if (timelineExecutivePm && !pmOptions.some((pm) => pm.id === timelineExecutivePm)) {
+      timelineExecutivePm = '';
+      localStorage.removeItem('lean_timeline_executive_pm');
+    }
+    const pmProjects = portfolioProjects.filter((project) => !timelineExecutivePm || (project.main_pm_person_id || project.main_pm_name) === timelineExecutivePm);
+    if (timelineExecutiveProject && !pmProjects.some((project) => project.project_id === timelineExecutiveProject)) {
+      timelineExecutiveProject = '';
+      localStorage.removeItem('lean_timeline_executive_project');
+    }
+    executiveProjectsShown = pmProjects.filter((project) => !timelineExecutiveProject || project.project_id === timelineExecutiveProject);
+    rows = executiveProjectsShown.flatMap((project) => {
+      const projectTasks = portfolioTasks.filter((item) => item.project_id === project.project_id);
+      const projectStarts = [project.start_date, ...projectTasks.map((item) => item.planned_start_date)].filter(Boolean).sort();
+      const projectEnds = [project.target_end_date, ...projectTasks.map((item) => item.planned_due_date)].filter(Boolean).sort();
+      const projectRow = {
+        code: project.project_code,
+        name: project.project_name,
+        meta: `Main PM: ${project.main_pm_name} · ${projectTasks.length} work item${projectTasks.length === 1 ? '' : 's'}`,
+        start: projectStarts[0] || null,
+        end: projectEnds.at(-1) || null,
+        progress: project.progress,
+        state: project.rag_status === 'Red' ? 'attention' : rowState(projectTasks),
+        depth: 0,
+        summary: true,
+        sourceItems: projectTasks
+      };
+      const phasesById = new Map();
+      projectTasks.forEach((item) => {
+        const key = item.phase_id || 'unassigned';
+        if (!phasesById.has(key)) phasesById.set(key, {
+          phase: {
+            phase_id: key,
+            phase_code: item.phase_code || 'NO PHASE',
+            phase_name: item.phase_name || 'Unassigned phase'
+          },
+          items: []
+        });
+        phasesById.get(key).items.push(item);
+      });
+      const phaseRows = [...phasesById.values()]
+        .map((group) => ({ ...aggregatePhase(group), depth: 1, summary: false, meta: `${project.project_code} · ${group.items.length} work item${group.items.length === 1 ? '' : 's'}` }))
+        .sort((left, right) => String(left.start || '9999').localeCompare(String(right.start || '9999')) || String(left.code).localeCompare(String(right.code)));
+      return [projectRow, ...phaseRows];
+    });
+    viewDescription = 'A · Portfolio roadmap across every active project, grouped by project and phase.';
+    const projectOptions = pmProjects.map((project) => `<option value="${escapeHtml(project.project_id)}" ${selected(timelineExecutiveProject, project.project_id)}>${escapeHtml(project.project_code)} · ${escapeHtml(project.project_name)}</option>`).join('');
+    timelineContext = `<section class="project-context timeline-portfolio-context"><div class="project-context-summary"><span class="section-kicker">PORTFOLIO SCOPE</span><div class="project-context-title"><span class="project-context-code">ALL</span><div><strong>Executive timeline across all projects</strong><small>${portfolioProjects.length} active project${portfolioProjects.length === 1 ? '' : 's'} · Filter without changing the current project</small></div></div></div><div class="timeline-executive-filters"><label><span>PM</span><select data-timeline-executive-pm><option value="">All PMs</option>${pmOptions.map((pm) => `<option value="${escapeHtml(pm.id)}" ${selected(timelineExecutivePm, pm.id)}>${escapeHtml(pm.name)}</option>`).join('')}</select></label><label><span>Project</span><select data-timeline-executive-project><option value="">All projects</option>${projectOptions}</select></label><label class="timeline-team-filter"><span>Team</span><select disabled title="Available when Team master data is introduced"><option>All teams · Coming later</option></select></label>${timelineExecutivePm || timelineExecutiveProject ? '<button type="button" class="secondary" data-timeline-filter-reset>Clear filters</button>' : ''}</div></section>`;
   } else if (timelineMode === 'delivery') {
+    const phaseGroups = phases.map((phase) => ({ phase, items: workItems.filter((item) => item.phase_id === phase.phase_id) }));
+    const unassignedItems = workItems.filter((item) => !item.phase_id || !phases.some((phase) => phase.phase_id === item.phase_id));
+    if (unassignedItems.length) phaseGroups.push({ phase: { phase_id: 'unassigned', phase_code: 'NO PHASE', phase_name: 'Unassigned phase', sort_order: 9999 }, items: unassignedItems });
     rows = phaseGroups.flatMap((group) => [aggregatePhase(group), ...orderedTasks(group.items).map(({ item, depth }) => taskRow(item, depth))]);
     viewDescription = 'B · Full delivery plan from Phase to Main task, Task, and Subtask.';
+    timelineContext = contextBar(current, projects);
   } else {
     rows = workItems.filter(isAttention).sort((left, right) => attentionScore(right) - attentionScore(left) || String(left.planned_due_date || '9999').localeCompare(String(right.planned_due_date || '9999'))).map((item) => taskRow(item, 0));
     viewDescription = 'C · Exceptions only: blocked, on hold, at-risk, overdue, or due within 30 days.';
+    timelineContext = contextBar(current, projects);
   }
 
   const scheduledRows = rows.filter((row) => parseDate(row.start) && parseDate(row.end));
@@ -2527,15 +2625,18 @@ async function timelineView() {
     const item = workItems.find((task) => task.task_id === id);
     return item && (!parseDate(item.planned_start_date) || !parseDate(item.planned_due_date));
   }).length;
-  const scheduledCount = timelineMode === 'executive' ? scheduledRows.length : shownScheduledCount || scheduledRows.length;
+  const scheduledCount = isExecutive ? executiveProjectsShown.length : shownScheduledCount || scheduledRows.length;
   const unscheduledListRows = timelineMode === 'delivery' ? unscheduledRows.filter((row) => !row.summary) : unscheduledRows;
-  const unscheduledCount = timelineMode === 'executive' ? unscheduledListRows.length : shownUnscheduledCount || unscheduledListRows.length;
+  const unscheduledCount = isExecutive ? unscheduledListRows.length : shownUnscheduledCount || unscheduledListRows.length;
   const unscheduledList = unscheduledListRows.length ? `<section class="timeline-unscheduled"><div><h3>Not scheduled</h3><p>${unscheduledCount} item${unscheduledCount === 1 ? '' : 's'} need both a planned start and due date before they can appear on the chart.</p></div><div class="timeline-unscheduled-list">${unscheduledListRows.slice(0, 12).map((row) => `<span><strong>${escapeHtml(row.code || '')}</strong>${escapeHtml(row.name || 'Untitled')}</span>`).join('')}${unscheduledListRows.length > 12 ? `<span class="subtle">+ ${unscheduledListRows.length - 12} more</span>` : ''}</div></section>` : '';
+  const timelineSummary = isExecutive
+    ? `<span><strong>${scheduledCount}</strong> projects shown</span><span><strong>${scheduledRows.length}</strong> scheduled rows</span><span><strong>${unscheduledCount}</strong> without dates</span>`
+    : `<span><strong>${scheduledCount}</strong> scheduled</span><span><strong>${unscheduledCount}</strong> without dates</span>`;
 
-  content.innerHTML = `${contextBar(current, projects)}
+  content.innerHTML = `${timelineContext}
   <section class="panel timeline-panel">
     <div class="panel-head timeline-head"><div><span class="section-kicker">PROJECT TIMELINE</span><h2>${escapeHtml(modeLabels[timelineMode])}</h2><span class="subtle">${escapeHtml(viewDescription)}</span></div><div class="timeline-modes" role="tablist" aria-label="Timeline views">${Object.entries(modeLabels).map(([key, label]) => `<button type="button" role="tab" aria-selected="${timelineMode === key}" class="${timelineMode === key ? 'active' : ''}" data-timeline-mode="${key}">${label}</button>`).join('')}</div></div>
-    <div class="timeline-summary"><span><strong>${scheduledCount}</strong> scheduled</span><span><strong>${unscheduledCount}</strong> without dates</span><span><strong>${dateLabel(rangeStart)}</strong> to <strong>${dateLabel(rangeEnd)}</strong></span></div>
+    <div class="timeline-summary">${timelineSummary}<span><strong>${dateLabel(rangeStart)}</strong> to <strong>${dateLabel(rangeEnd)}</strong></span></div>
     ${scheduledRows.length ? `<div class="timeline-scroll"><div class="timeline-chart" style="--timeline-width:${chartWidth}px"><div class="timeline-axis-row"><div class="timeline-axis-label">Work item</div><div class="timeline-axis" style="grid-template-columns:repeat(${months.length},minmax(${monthWidth}px,1fr))">${monthHeader}</div></div>${scheduledRows.map(renderTimelineRow).join('')}</div></div>` : '<p class="empty">No scheduled work matches this view.</p>'}
     ${unscheduledList}
     <div class="timeline-legend" aria-label="Timeline legend"><span><i class="done"></i>Done</span><span><i class="active"></i>In progress</span><span><i class="attention"></i>Needs attention</span><span><i class="future"></i>Not started</span>${todayPosition == null ? '' : `<span><i class="today"></i>Today · ${dateLabel(todayIso)}</span>`}</div>
@@ -2559,7 +2660,7 @@ async function projectControlPortal() {
   };
   const descriptions = {
     portfolio: 'Compare project progress, health, and delivery status across the portfolio.',
-    timeline: 'Review the selected project as an executive roadmap, delivery plan, or attention view.',
+    timeline: 'Review the full portfolio in Executive, or the selected project in Delivery and Attention.',
     workload: 'Review open work, capacity, status, and delivery pressure for the selected project.',
     'all-workload': 'Analyze aggregated team capacity, cross-project workload distribution, and delivery risk across all active projects.'
   };
@@ -2671,6 +2772,24 @@ document.addEventListener('change', (event) => {
     navigate(document.querySelector('.nav.active')?.dataset.page || 'dashboard');
     return;
   }
+  const executivePmFilter = event.target.closest('[data-timeline-executive-pm]');
+  if (executivePmFilter) {
+    timelineExecutivePm = executivePmFilter.value;
+    timelineExecutiveProject = '';
+    if (timelineExecutivePm) localStorage.setItem('lean_timeline_executive_pm', timelineExecutivePm);
+    else localStorage.removeItem('lean_timeline_executive_pm');
+    localStorage.removeItem('lean_timeline_executive_project');
+    navigate('project-control');
+    return;
+  }
+  const executiveProjectFilter = event.target.closest('[data-timeline-executive-project]');
+  if (executiveProjectFilter) {
+    timelineExecutiveProject = executiveProjectFilter.value;
+    if (timelineExecutiveProject) localStorage.setItem('lean_timeline_executive_project', timelineExecutiveProject);
+    else localStorage.removeItem('lean_timeline_executive_project');
+    navigate('project-control');
+    return;
+  }
   const projectSelector = event.target.closest('[data-project-context]');
   if (projectSelector) {
     activeProjectId = projectSelector.value;
@@ -2687,6 +2806,14 @@ document.addEventListener('change', (event) => {
     localStorage.setItem('lean_task_grouping', currentTaskGrouping);
     workBreakdown();
   }
+});
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-timeline-filter-reset]')) return;
+  timelineExecutivePm = '';
+  timelineExecutiveProject = '';
+  localStorage.removeItem('lean_timeline_executive_pm');
+  localStorage.removeItem('lean_timeline_executive_project');
+  navigate('project-control');
 });
 document.addEventListener('click', (event) => {
   const historyButton = event.target.closest('[data-open-task-history]');

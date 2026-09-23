@@ -1090,6 +1090,28 @@ test('serves updated UI assets and contracts for All Projects Workload', async (
   assert.ok(appText.includes('All Projects Workload'));
 });
 
+test('serves the Project Portal timeline with executive, delivery, and attention views', async () => {
+  const pageRes = await fetch(`${baseUrl}/`);
+  assert.equal(pageRes.status, 200);
+  const pageText = await pageRes.text();
+  assert.ok(pageText.includes('/timeline.css?v=timeline-1'));
+
+  const cssRes = await fetch(`${baseUrl}/timeline.css`);
+  assert.equal(cssRes.status, 200);
+  const cssText = await cssRes.text();
+  assert.ok(cssText.includes('.timeline-chart'));
+  assert.ok(cssText.includes('.timeline-unscheduled'));
+
+  const appRes = await fetch(`${baseUrl}/app.js`);
+  assert.equal(appRes.status, 200);
+  const appText = await appRes.text();
+  assert.ok(appText.includes('timelineView'));
+  assert.ok(appText.includes("executive: 'A · Executive'"));
+  assert.ok(appText.includes("delivery: 'B · Delivery plan'"));
+  assert.ok(appText.includes("attention: 'C · Attention'"));
+  assert.ok(appText.includes('data-timeline-mode'));
+});
+
 test('All Projects Workload: interaction contracts, grouping, and multi-filter calculation', async () => {
   const data = await fetch(`${baseUrl}/api/workload/all-projects?includeDone=true`).then((r) => r.json());
   const tasks = data.taskDetailRecords;
@@ -1147,4 +1169,3 @@ test('All Projects Workload: interaction contracts, grouping, and multi-filter c
     }
   }
 });
-

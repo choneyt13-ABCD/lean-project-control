@@ -19,6 +19,7 @@ let raidItems = [];
 let peopleItems = [];
 let assignmentItems = [];
 let controlPortalSession = localStorage.getItem('lean_control_portal_session') || 'portfolio';
+let timelineMode = localStorage.getItem('lean_timeline_mode') || 'delivery';
 let portalSession = localStorage.getItem('lean_portal_session') || 'setup';
 let weeklyPortalSession = localStorage.getItem('lean_weekly_portal_session') || 'weekly';
 let currentTaskGrouping = localStorage.getItem('lean_task_grouping') || 'activity';
@@ -2390,9 +2391,161 @@ async function allProjectsWorkloadView() {
   render();
 }
 
+async function timelineView() {
+  const [{ current, projects }, phases, workItems] = await Promise.all([
+    projectContext(),
+    api('/phases'),
+    api('/tasks')
+  ]);
+  if (!['executive', 'delivery', 'attention'].includes(timelineMode)) timelineMode = 'delivery';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const parseDate = (value) => {
+    if (!value) return null;
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const dateLabel = (value) => (value instanceof Date ? value : parseDate(value))?.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) || 'Not scheduled';
+  const weightedProgress = (items) => {
+    if (!items.length) return 0;
+    const weighted = items.filter((item) => Number(item.weight) > 0);
+    if (weighted.length) {
+      const totalWeight = weighted.reduce((sum, item) => sum + Number(item.weight), 0);
+      return Math.round(weighted.reduce((sum, item) => sum + Number(item.progress || 0) * Number(item.weight), 0) / totalWeight);
+    }
+    return Math.round(items.reduce((sum, item) => sum + Number(item.progress || 0), 0) / items.length);
+  };
+  const rowState = (items) => {
+    if (items.length && items.every((item) => item.status === 'Done')) return 'done';
+    if (items.some((item) => ['Blocked', 'OnHold'].includes(item.status) || item.rag_status === 'Red')) return 'attention';
+    if (items.length && items.every((item) => parseDate(item.planned_start_date) > today)) return 'future';
+    return 'active';
+  };
+  const phaseGroups = phases.map((phase) => ({
+    phase,
+    items: workItems.filter((item) => item.phase_id === phase.phase_id)
+  }));
+  const unassignedItems = workItems.filter((item) => !item.phase_id || !phases.some((phase) => phase.phase_id === item.phase_id));
+  if (unassignedItems.length) phaseGroups.push({ phase: { phase_id: 'unassigned', phase_code: 'NO PHASE', phase_name: 'Unassigned phase', sort_order: 9999 }, items: unassignedItems });
+
+  const aggregatePhase = ({ phase, items }) => {
+    const starts = [phase.planned_start_date, ...items.map((item) => item.planned_start_date)].filter(Boolean).sort();
+    const ends = [phase.planned_due_date, ...items.map((item) => item.planned_due_date)].filter(Boolean).sort();
+    return {
+      code: phase.phase_code,
+      name: phase.phase_name,
+      meta: `${items.length} work item${items.length === 1 ? '' : 's'}`,
+      start: starts[0] || null,
+      end: ends.at(-1) || null,
+      progress: weightedProgress(items),
+      state: rowState(items),
+      depth: 0,
+      summary: true,
+      sourceItems: items
+    };
+  };
+  const orderedTasks = (items) => {
+    const ids = new Set(items.map((item) => item.task_id));
+    const children = new Map();
+    items.forEach((item) => {
+      const parent = ids.has(item.parent_task_id) ? item.parent_task_id : null;
+      if (!children.has(parent)) children.set(parent, []);
+      children.get(parent).push(item);
+    });
+    const result = [];
+    const visit = (item, depth) => {
+      result.push({ item, depth });
+      (children.get(item.task_id) || []).forEach((child) => visit(child, depth + 1));
+    };
+    (children.get(null) || []).forEach((item) => visit(item, 1));
+    return result;
+  };
+  const taskRow = (item, depth = 1) => ({
+    code: item.task_code,
+    name: item.task_name,
+    meta: `${item.owner_name || 'No owner'} · ${item.status === 'InProgress' ? 'In progress' : item.status === 'NotStarted' ? 'Not started' : item.status === 'OnHold' ? 'On hold' : item.status}`,
+    start: item.planned_start_date,
+    end: item.planned_due_date,
+    progress: Math.round(Number(item.progress || 0)),
+    state: item.status === 'Done' ? 'done' : ['Blocked', 'OnHold'].includes(item.status) || item.rag_status === 'Red' ? 'attention' : parseDate(item.planned_start_date) > today ? 'future' : 'active',
+    depth,
+    summary: false,
+    sourceItems: [item]
+  });
+  const isAttention = (item) => {
+    if (item.status === 'Done' || item.status === 'Cancelled') return false;
+    const due = parseDate(item.planned_due_date);
+    const dueSoon = due && due >= today && due <= new Date(today.getTime() + 30 * 86400000);
+    return ['Blocked', 'OnHold'].includes(item.status) || ['Red', 'Amber'].includes(item.rag_status) || (due && due < today) || dueSoon;
+  };
+  const attentionScore = (item) => {
+    const due = parseDate(item.planned_due_date);
+    return (item.status === 'Blocked' ? 100 : 0) + (item.rag_status === 'Red' ? 80 : 0) + (due && due < today ? 60 : 0) + (item.status === 'OnHold' ? 40 : 0) + (item.rag_status === 'Amber' ? 20 : 0);
+  };
+
+  let rows = [];
+  let viewDescription = '';
+  if (timelineMode === 'executive') {
+    rows = phaseGroups.map(aggregatePhase);
+    viewDescription = 'A · Phase-level roadmap for steering and executive review.';
+  } else if (timelineMode === 'delivery') {
+    rows = phaseGroups.flatMap((group) => [aggregatePhase(group), ...orderedTasks(group.items).map(({ item, depth }) => taskRow(item, depth))]);
+    viewDescription = 'B · Full delivery plan from Phase to Main task, Task, and Subtask.';
+  } else {
+    rows = workItems.filter(isAttention).sort((left, right) => attentionScore(right) - attentionScore(left) || String(left.planned_due_date || '9999').localeCompare(String(right.planned_due_date || '9999'))).map((item) => taskRow(item, 0));
+    viewDescription = 'C · Exceptions only: blocked, on hold, at-risk, overdue, or due within 30 days.';
+  }
+
+  const scheduledRows = rows.filter((row) => parseDate(row.start) && parseDate(row.end));
+  const unscheduledRows = rows.filter((row) => !parseDate(row.start) || !parseDate(row.end));
+  const datedValues = scheduledRows.flatMap((row) => [parseDate(row.start), parseDate(row.end)]).filter(Boolean);
+  let rangeStart = datedValues.length ? new Date(Math.min(...datedValues)) : new Date(today.getFullYear(), today.getMonth(), 1);
+  let rangeEnd = datedValues.length ? new Date(Math.max(...datedValues)) : new Date(today.getFullYear(), today.getMonth() + 5, 1);
+  rangeStart = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+  rangeEnd = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth() + 1, 0);
+  const months = [];
+  for (let cursor = new Date(rangeStart); cursor <= rangeEnd; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) months.push(new Date(cursor));
+  const rangeMs = Math.max(86400000, rangeEnd - rangeStart);
+  const position = (value) => Math.max(0, Math.min(100, ((parseDate(value) - rangeStart) / rangeMs) * 100));
+  const todayPosition = today >= rangeStart && today <= rangeEnd ? ((today - rangeStart) / rangeMs) * 100 : null;
+  const monthWidth = timelineMode === 'executive' ? 82 : 96;
+  const chartWidth = Math.max(720, months.length * monthWidth);
+  const monthHeader = months.map((month) => `<span>${month.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}</span>`).join('');
+  const renderTimelineRow = (row) => {
+    const left = position(row.start);
+    const width = Math.max(0.8, position(row.end) - left);
+    const period = `${dateLabel(row.start)} – ${dateLabel(row.end)}`;
+    return `<div class="timeline-row ${row.summary ? 'summary' : ''}"><div class="timeline-label" style="--timeline-depth:${Math.min(row.depth, 4)}"><span class="code">${escapeHtml(row.code || '')}</span><strong>${escapeHtml(row.name || 'Untitled')}</strong><small>${escapeHtml(row.meta || '')}</small></div><div class="timeline-track" style="--timeline-months:${months.length}">${todayPosition == null ? '' : `<span class="timeline-today" style="left:${todayPosition}%" aria-hidden="true"></span>`}<span class="timeline-bar ${row.state}" style="left:${left}%;width:${width}%;--timeline-progress:${Math.max(0, Math.min(100, row.progress))}%" title="${escapeHtml(period)} · ${row.progress}% complete" aria-label="${escapeHtml(row.name)}: ${escapeHtml(period)}, ${row.progress}% complete"><span>${row.progress}%</span></span></div></div>`;
+  };
+  const modeLabels = { executive: 'A · Executive', delivery: 'B · Delivery plan', attention: 'C · Attention' };
+  const scheduledTaskIds = new Set(scheduledRows.flatMap((row) => row.sourceItems || []).map((item) => item.task_id).filter(Boolean));
+  const shownTasks = new Set(rows.flatMap((row) => row.sourceItems || []).map((item) => item.task_id).filter(Boolean));
+  const shownScheduledCount = [...scheduledTaskIds].length;
+  const shownUnscheduledCount = [...shownTasks].filter((id) => {
+    const item = workItems.find((task) => task.task_id === id);
+    return item && (!parseDate(item.planned_start_date) || !parseDate(item.planned_due_date));
+  }).length;
+  const scheduledCount = timelineMode === 'executive' ? scheduledRows.length : shownScheduledCount || scheduledRows.length;
+  const unscheduledListRows = timelineMode === 'delivery' ? unscheduledRows.filter((row) => !row.summary) : unscheduledRows;
+  const unscheduledCount = timelineMode === 'executive' ? unscheduledListRows.length : shownUnscheduledCount || unscheduledListRows.length;
+  const unscheduledList = unscheduledListRows.length ? `<section class="timeline-unscheduled"><div><h3>Not scheduled</h3><p>${unscheduledCount} item${unscheduledCount === 1 ? '' : 's'} need both a planned start and due date before they can appear on the chart.</p></div><div class="timeline-unscheduled-list">${unscheduledListRows.slice(0, 12).map((row) => `<span><strong>${escapeHtml(row.code || '')}</strong>${escapeHtml(row.name || 'Untitled')}</span>`).join('')}${unscheduledListRows.length > 12 ? `<span class="subtle">+ ${unscheduledListRows.length - 12} more</span>` : ''}</div></section>` : '';
+
+  content.innerHTML = `${contextBar(current, projects)}
+  <section class="panel timeline-panel">
+    <div class="panel-head timeline-head"><div><span class="section-kicker">PROJECT TIMELINE</span><h2>${escapeHtml(modeLabels[timelineMode])}</h2><span class="subtle">${escapeHtml(viewDescription)}</span></div><div class="timeline-modes" role="tablist" aria-label="Timeline views">${Object.entries(modeLabels).map(([key, label]) => `<button type="button" role="tab" aria-selected="${timelineMode === key}" class="${timelineMode === key ? 'active' : ''}" data-timeline-mode="${key}">${label}</button>`).join('')}</div></div>
+    <div class="timeline-summary"><span><strong>${scheduledCount}</strong> scheduled</span><span><strong>${unscheduledCount}</strong> without dates</span><span><strong>${dateLabel(rangeStart)}</strong> to <strong>${dateLabel(rangeEnd)}</strong></span></div>
+    ${scheduledRows.length ? `<div class="timeline-scroll"><div class="timeline-chart" style="--timeline-width:${chartWidth}px"><div class="timeline-axis-row"><div class="timeline-axis-label">Work item</div><div class="timeline-axis" style="grid-template-columns:repeat(${months.length},minmax(${monthWidth}px,1fr))">${monthHeader}</div></div>${scheduledRows.map(renderTimelineRow).join('')}</div></div>` : '<p class="empty">No scheduled work matches this view.</p>'}
+    ${unscheduledList}
+    <div class="timeline-legend" aria-label="Timeline legend"><span><i class="done"></i>Done</span><span><i class="active"></i>In progress</span><span><i class="attention"></i>Needs attention</span><span><i class="future"></i>Not started</span>${todayPosition == null ? '' : `<span><i class="today"></i>Today · ${dateLabel(todayIso)}</span>`}</div>
+  </section>`;
+}
+
 async function projectControlPortal() {
   const sessions = {
     portfolio,
+    timeline: timelineView,
     workload: workloadView,
     'all-workload': allProjectsWorkloadView
   };
@@ -2400,11 +2553,13 @@ async function projectControlPortal() {
   await sessions[controlPortalSession]();
   const labels = {
     portfolio: 'Portfolio / Projects',
+    timeline: 'Timeline',
     workload: 'Project Workload',
     'all-workload': 'All Projects Workload'
   };
   const descriptions = {
     portfolio: 'Compare project progress, health, and delivery status across the portfolio.',
+    timeline: 'Review the selected project as an executive roadmap, delivery plan, or attention view.',
     workload: 'Review open work, capacity, status, and delivery pressure for the selected project.',
     'all-workload': 'Analyze aggregated team capacity, cross-project workload distribution, and delivery risk across all active projects.'
   };
@@ -2416,6 +2571,7 @@ const pageTitles = { dashboard: 'Master control', 'project-control': 'Project po
 
 async function navigate(page) {
   if (page === 'portfolio') { controlPortalSession = 'portfolio'; page = 'project-control'; }
+  if (page === 'timeline') { controlPortalSession = 'timeline'; page = 'project-control'; }
   if (page === 'workload') { controlPortalSession = 'workload'; page = 'project-control'; }
   if (page === 'all-workload' || page === 'all-projects-workload') { controlPortalSession = 'all-workload'; page = 'project-control'; }
   if (page === 'projects') { portalSession = 'setup'; page = 'portal'; }
@@ -2577,7 +2733,7 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
-  const target = event.target.closest('[data-go], .nav, [data-control-portal-session], [data-portal-session], [data-weekly-portal-session], [data-select-project], [data-open-project], [data-edit-project], [data-open-template-import], [data-open-activity], [data-open-task], [data-update-task], [data-open-task-update], [data-open-task-note-create], [data-edit-weekly-update], [data-add-task-child], [data-add-subtask-child], [data-add-task-to-wbs], [data-add-activity-to-phase], [data-open-update], [data-open-weekly-plan], [data-open-role-update], [data-open-raid], [data-open-person], [data-open-existing-person], [data-open-assignment], [data-edit-task], [data-edit-activity], [data-edit-update], [data-edit-plan], [data-edit-role], [data-edit-raid], [data-edit-person], [data-edit-assignment], [data-delete-task], [data-delete-activity], [data-delete-update], [data-delete-plan], [data-delete-role], [data-delete-raid], [data-delete-person], [data-delete-assignment], [data-group-toggle], [data-parent-toggle]');
+  const target = event.target.closest('[data-go], .nav, [data-control-portal-session], [data-timeline-mode], [data-portal-session], [data-weekly-portal-session], [data-select-project], [data-open-project], [data-edit-project], [data-open-template-import], [data-open-activity], [data-open-task], [data-update-task], [data-open-task-update], [data-open-task-note-create], [data-edit-weekly-update], [data-add-task-child], [data-add-subtask-child], [data-add-task-to-wbs], [data-add-activity-to-phase], [data-open-update], [data-open-weekly-plan], [data-open-role-update], [data-open-raid], [data-open-person], [data-open-existing-person], [data-open-assignment], [data-edit-task], [data-edit-activity], [data-edit-update], [data-edit-plan], [data-edit-role], [data-edit-raid], [data-edit-person], [data-edit-assignment], [data-delete-task], [data-delete-activity], [data-delete-update], [data-delete-plan], [data-delete-role], [data-delete-raid], [data-delete-person], [data-delete-assignment], [data-group-toggle], [data-parent-toggle]');
   if (!target) return;
   if (target.dataset.parentToggle) {
     const parentId = target.dataset.parentToggle;
@@ -2597,6 +2753,7 @@ document.addEventListener('click', async (event) => {
   const selectedProject = target.dataset.selectProject;
   if (selectedProject) { activeProjectId = selectedProject; localStorage.setItem('lean_active_project_id', activeProjectId); tasks = []; }
   if (target.dataset.controlPortalSession) { controlPortalSession = target.dataset.controlPortalSession; localStorage.setItem('lean_control_portal_session', controlPortalSession); navigate('project-control'); return; }
+  if (target.dataset.timelineMode) { timelineMode = target.dataset.timelineMode; localStorage.setItem('lean_timeline_mode', timelineMode); navigate('project-control'); return; }
   if (target.dataset.portalSession) { portalSession = target.dataset.portalSession; localStorage.setItem('lean_portal_session', portalSession); navigate('portal'); return; }
   if (target.dataset.weeklyPortalSession) { weeklyPortalSession = target.dataset.weeklyPortalSession; localStorage.setItem('lean_weekly_portal_session', weeklyPortalSession); navigate('weekly-portal'); return; }
   if (target.dataset.go || target.classList.contains('nav')) { navigate(target.dataset.go || target.dataset.page); return; }

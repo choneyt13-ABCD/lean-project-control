@@ -1112,6 +1112,7 @@ test('serves the Project Portal timeline with portfolio executive filters, deliv
   assert.ok(appText.includes('data-timeline-mode'));
   assert.ok(appText.includes('data-timeline-executive-pm'));
   assert.ok(appText.includes('data-timeline-executive-project'));
+  assert.ok(appText.includes('data-timeline-project-toggle'));
   assert.ok(appText.includes('Filter without changing the current project'));
 });
 
@@ -1122,6 +1123,7 @@ test('All Projects Workload: interaction contracts, grouping, and multi-filter c
   assert.ok(data.projectAggregates.every((project) => Object.hasOwn(project, 'mainPmPersonId')));
   assert.ok(data.projectAggregates.every((project) => Object.hasOwn(project, 'startDate') && Object.hasOwn(project, 'targetEndDate')));
   assert.ok(tasks.some((task) => task.phaseId && task.phaseCode && task.phaseName));
+  assert.ok(tasks.some((task) => task.parentTaskId));
 
   // Filter by status InProgress
   const inProgressTasks = tasks.filter((t) => t.status === 'InProgress');

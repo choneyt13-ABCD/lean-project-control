@@ -1522,7 +1522,7 @@ app.get('/api/workload', async (request) => {
 
   const projectTasks = db.prepare(`
     SELECT t.task_id, t.task_code, t.task_name, t.task_type, t.status, t.rag_status,
-      t.progress, t.planned_start_date, t.planned_due_date, t.workstream,
+      t.progress, t.planned_start_date, t.planned_due_date, t.workstream, t.parent_task_id,
       t.owner_person_id,
       w.wbs_code, w.wbs_name,
       ph.phase_name, ph.phase_code,
@@ -1654,7 +1654,7 @@ app.get('/api/workload/all-projects', async (request) => {
   // 4. Fetch Tasks in active projects
   const tasks = db.prepare(`
     SELECT t.task_id, t.project_id, t.task_code, t.task_name, t.task_type, t.status, t.rag_status,
-      t.progress, t.planned_start_date, t.planned_due_date, t.workstream,
+      t.progress, t.planned_start_date, t.planned_due_date, t.workstream, t.parent_task_id,
       t.owner_person_id,
       w.wbs_item_id AS wbs_id, w.wbs_code, w.wbs_name,
       ph.phase_id, ph.phase_code, ph.phase_name,
@@ -1865,10 +1865,14 @@ app.get('/api/workload/all-projects', async (request) => {
         task_name: t.task_name,
         taskType: t.task_type,
         task_type: t.task_type,
+        parentTaskId: t.parent_task_id,
+        parent_task_id: t.parent_task_id,
         status: t.status,
         ragStatus: t.rag_status,
         rag_status: t.rag_status,
         progress: t.progress || 0,
+        ownerName: t.owner_name,
+        owner_name: t.owner_name,
         plannedDueDate: t.planned_due_date || null,
         planned_due_date: t.planned_due_date || null,
         plannedStartDate: t.planned_start_date || null,

@@ -22,6 +22,8 @@ let controlPortalSession = localStorage.getItem('lean_control_portal_session') |
 let timelineMode = localStorage.getItem('lean_timeline_mode') || 'delivery';
 let timelineExecutivePm = localStorage.getItem('lean_timeline_executive_pm') || '';
 let timelineExecutiveProject = localStorage.getItem('lean_timeline_executive_project') || '';
+let timelineExpandedProjects = new Set();
+try { timelineExpandedProjects = new Set(JSON.parse(localStorage.getItem('lean_timeline_expanded_projects') || '[]')); } catch { /* use collapsed defaults */ }
 let portalSession = localStorage.getItem('lean_portal_session') || 'setup';
 let weeklyPortalSession = localStorage.getItem('lean_weekly_portal_session') || 'weekly';
 let currentTaskGrouping = localStorage.getItem('lean_task_grouping') || 'activity';
@@ -2470,7 +2472,7 @@ async function timelineView() {
   const taskRow = (item, depth = 1) => ({
     code: item.task_code,
     name: item.task_name,
-    meta: `${item.owner_name || 'No owner'} · ${item.status === 'InProgress' ? 'In progress' : item.status === 'NotStarted' ? 'Not started' : item.status === 'OnHold' ? 'On hold' : item.status}`,
+    meta: `${item.owner_name || item.ownerName || 'No owner'} · ${item.status === 'InProgress' ? 'In progress' : item.status === 'NotStarted' ? 'Not started' : item.status === 'OnHold' ? 'On hold' : item.status}`,
     start: item.planned_start_date,
     end: item.planned_due_date,
     progress: Math.round(Number(item.progress || 0)),
@@ -2521,11 +2523,13 @@ async function timelineView() {
         task_code: task.taskCode || task.task_code,
         task_name: task.taskName || task.task_name,
         task_type: task.taskType || task.task_type,
+        parent_task_id: task.parentTaskId || task.parent_task_id,
         status: task.status,
         rag_status: task.ragStatus || task.rag_status,
         progress: Number(task.progress || 0),
         planned_start_date: task.plannedStartDate || task.planned_start_date,
         planned_due_date: task.plannedDueDate || task.planned_due_date,
+        owner_name: task.ownerName || task.owner_name,
         phase_id: task.phaseId || task.phase_id,
         phase_code: task.phaseCode || task.phase_code,
         phase_name: task.phaseName || task.phase_name
@@ -2548,6 +2552,7 @@ async function timelineView() {
     executiveProjectsShown = pmProjects.filter((project) => !timelineExecutiveProject || project.project_id === timelineExecutiveProject);
     rows = executiveProjectsShown.flatMap((project) => {
       const projectTasks = portfolioTasks.filter((item) => item.project_id === project.project_id);
+      const expanded = timelineExpandedProjects.has(project.project_id);
       const projectStarts = [project.start_date, ...projectTasks.map((item) => item.planned_start_date)].filter(Boolean).sort();
       const projectEnds = [project.target_end_date, ...projectTasks.map((item) => item.planned_due_date)].filter(Boolean).sort();
       const projectRow = {
@@ -2560,7 +2565,10 @@ async function timelineView() {
         state: project.rag_status === 'Red' ? 'attention' : rowState(projectTasks),
         depth: 0,
         summary: true,
-        sourceItems: projectTasks
+        sourceItems: projectTasks,
+        projectId: project.project_id,
+        expandable: true,
+        expanded
       };
       const phasesById = new Map();
       projectTasks.forEach((item) => {
@@ -2575,10 +2583,27 @@ async function timelineView() {
         });
         phasesById.get(key).items.push(item);
       });
-      const phaseRows = [...phasesById.values()]
-        .map((group) => ({ ...aggregatePhase(group), depth: 1, summary: false, meta: `${project.project_code} · ${group.items.length} work item${group.items.length === 1 ? '' : 's'}` }))
-        .sort((left, right) => String(left.start || '9999').localeCompare(String(right.start || '9999')) || String(left.code).localeCompare(String(right.code)));
-      return [projectRow, ...phaseRows];
+      const nestedRows = [...phasesById.values()]
+        .sort((left, right) => String(left.phase.planned_start_date || left.items[0]?.planned_start_date || '9999').localeCompare(String(right.phase.planned_start_date || right.items[0]?.planned_start_date || '9999')) || String(left.phase.phase_code).localeCompare(String(right.phase.phase_code)))
+        .flatMap((group) => {
+          const phaseRow = {
+            ...aggregatePhase(group),
+            depth: 1,
+            summary: false,
+            meta: `${project.project_code} · ${group.items.length} work item${group.items.length === 1 ? '' : 's'}`,
+            projectId: project.project_id,
+            hidden: !expanded,
+            projectGroup: 'nested'
+          };
+          const taskRows = orderedTasks(group.items).map(({ item, depth }) => ({
+            ...taskRow(item, Math.min(depth + 1, 4)),
+            projectId: project.project_id,
+            hidden: !expanded,
+            projectGroup: 'nested'
+          }));
+          return [phaseRow, ...taskRows];
+        });
+      return [projectRow, ...nestedRows];
     });
     viewDescription = 'A · Portfolio roadmap across every active project, grouped by project and phase.';
     const projectOptions = pmProjects.map((project) => `<option value="${escapeHtml(project.project_id)}" ${selected(timelineExecutiveProject, project.project_id)}>${escapeHtml(project.project_code)} · ${escapeHtml(project.project_name)}</option>`).join('');
@@ -2596,8 +2621,9 @@ async function timelineView() {
     timelineContext = contextBar(current, projects);
   }
 
-  const scheduledRows = rows.filter((row) => parseDate(row.start) && parseDate(row.end));
-  const unscheduledRows = rows.filter((row) => !parseDate(row.start) || !parseDate(row.end));
+  const visibleRows = rows.filter((row) => !row.hidden);
+  const scheduledRows = visibleRows.filter((row) => parseDate(row.start) && parseDate(row.end));
+  const unscheduledRows = visibleRows.filter((row) => !parseDate(row.start) || !parseDate(row.end));
   const datedValues = scheduledRows.flatMap((row) => [parseDate(row.start), parseDate(row.end)]).filter(Boolean);
   let rangeStart = datedValues.length ? new Date(Math.min(...datedValues)) : new Date(today.getFullYear(), today.getMonth(), 1);
   let rangeEnd = datedValues.length ? new Date(Math.max(...datedValues)) : new Date(today.getFullYear(), today.getMonth() + 5, 1);
@@ -2615,7 +2641,8 @@ async function timelineView() {
     const left = position(row.start);
     const width = Math.max(0.8, position(row.end) - left);
     const period = `${dateLabel(row.start)} – ${dateLabel(row.end)}`;
-    return `<div class="timeline-row ${row.summary ? 'summary' : ''}"><div class="timeline-label" style="--timeline-depth:${Math.min(row.depth, 4)}"><span class="code">${escapeHtml(row.code || '')}</span><strong>${escapeHtml(row.name || 'Untitled')}</strong><small>${escapeHtml(row.meta || '')}</small></div><div class="timeline-track" style="--timeline-months:${months.length}">${todayPosition == null ? '' : `<span class="timeline-today" style="left:${todayPosition}%" aria-hidden="true"></span>`}<span class="timeline-bar ${row.state}" style="left:${left}%;width:${width}%;--timeline-progress:${Math.max(0, Math.min(100, row.progress))}%" title="${escapeHtml(period)} · ${row.progress}% complete" aria-label="${escapeHtml(row.name)}: ${escapeHtml(period)}, ${row.progress}% complete"><span>${row.progress}%</span></span></div></div>`;
+    const expandButton = row.expandable ? `<button type="button" class="timeline-expand" data-timeline-project-toggle="${escapeHtml(row.projectId)}" aria-expanded="${row.expanded}" aria-label="${row.expanded ? 'Collapse' : 'Expand'} ${escapeHtml(row.name || 'project')}">${row.expanded ? '−' : '+'}</button>` : '';
+    return `<div class="timeline-row ${row.summary ? 'summary' : ''} ${row.expandable ? 'project-summary' : ''}"><div class="timeline-label" style="--timeline-depth:${Math.min(row.depth, 4)}">${expandButton}<span class="code">${escapeHtml(row.code || '')}</span><strong>${escapeHtml(row.name || 'Untitled')}</strong><small>${escapeHtml(row.meta || '')}</small></div><div class="timeline-track" style="--timeline-months:${months.length}">${todayPosition == null ? '' : `<span class="timeline-today" style="left:${todayPosition}%" aria-hidden="true"></span>`}<span class="timeline-bar ${row.state}" style="left:${left}%;width:${width}%;--timeline-progress:${Math.max(0, Math.min(100, row.progress))}%" title="${escapeHtml(period)} · ${row.progress}% complete" aria-label="${escapeHtml(row.name)}: ${escapeHtml(period)}, ${row.progress}% complete"><span>${row.progress}%</span></span></div></div>`;
   };
   const modeLabels = { executive: 'A · Executive', delivery: 'B · Delivery plan', attention: 'C · Attention' };
   const scheduledTaskIds = new Set(scheduledRows.flatMap((row) => row.sourceItems || []).map((item) => item.task_id).filter(Boolean));
@@ -2860,7 +2887,7 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
-  const target = event.target.closest('[data-go], .nav, [data-control-portal-session], [data-timeline-mode], [data-portal-session], [data-weekly-portal-session], [data-select-project], [data-open-project], [data-edit-project], [data-open-template-import], [data-open-activity], [data-open-task], [data-update-task], [data-open-task-update], [data-open-task-note-create], [data-edit-weekly-update], [data-add-task-child], [data-add-subtask-child], [data-add-task-to-wbs], [data-add-activity-to-phase], [data-open-update], [data-open-weekly-plan], [data-open-role-update], [data-open-raid], [data-open-person], [data-open-existing-person], [data-open-assignment], [data-edit-task], [data-edit-activity], [data-edit-update], [data-edit-plan], [data-edit-role], [data-edit-raid], [data-edit-person], [data-edit-assignment], [data-delete-task], [data-delete-activity], [data-delete-update], [data-delete-plan], [data-delete-role], [data-delete-raid], [data-delete-person], [data-delete-assignment], [data-group-toggle], [data-parent-toggle]');
+  const target = event.target.closest('[data-go], .nav, [data-control-portal-session], [data-timeline-mode], [data-timeline-project-toggle], [data-portal-session], [data-weekly-portal-session], [data-select-project], [data-open-project], [data-edit-project], [data-open-template-import], [data-open-activity], [data-open-task], [data-update-task], [data-open-task-update], [data-open-task-note-create], [data-edit-weekly-update], [data-add-task-child], [data-add-subtask-child], [data-add-task-to-wbs], [data-add-activity-to-phase], [data-open-update], [data-open-weekly-plan], [data-open-role-update], [data-open-raid], [data-open-person], [data-open-existing-person], [data-open-assignment], [data-edit-task], [data-edit-activity], [data-edit-update], [data-edit-plan], [data-edit-role], [data-edit-raid], [data-edit-person], [data-edit-assignment], [data-delete-task], [data-delete-activity], [data-delete-update], [data-delete-plan], [data-delete-role], [data-delete-raid], [data-delete-person], [data-delete-assignment], [data-group-toggle], [data-parent-toggle]');
   if (!target) return;
   if (target.dataset.parentToggle) {
     const parentId = target.dataset.parentToggle;
@@ -2879,6 +2906,14 @@ document.addEventListener('click', async (event) => {
   }
   const selectedProject = target.dataset.selectProject;
   if (selectedProject) { activeProjectId = selectedProject; localStorage.setItem('lean_active_project_id', activeProjectId); tasks = []; }
+  if (target.dataset.timelineProjectToggle) {
+    const projectId = target.dataset.timelineProjectToggle;
+    if (timelineExpandedProjects.has(projectId)) timelineExpandedProjects.delete(projectId);
+    else timelineExpandedProjects.add(projectId);
+    localStorage.setItem('lean_timeline_expanded_projects', JSON.stringify([...timelineExpandedProjects]));
+    navigate('project-control');
+    return;
+  }
   if (target.dataset.controlPortalSession) { controlPortalSession = target.dataset.controlPortalSession; localStorage.setItem('lean_control_portal_session', controlPortalSession); navigate('project-control'); return; }
   if (target.dataset.timelineMode) { timelineMode = target.dataset.timelineMode; localStorage.setItem('lean_timeline_mode', timelineMode); navigate('project-control'); return; }
   if (target.dataset.portalSession) { portalSession = target.dataset.portalSession; localStorage.setItem('lean_portal_session', portalSession); navigate('portal'); return; }

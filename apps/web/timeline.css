@@ -178,6 +178,26 @@ main,
   white-space: nowrap;
 }
 
+.timeline-expand {
+  position: absolute;
+  top: 17px;
+  left: 12px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #b9c9bc;
+  border-radius: 5px;
+  background: #fff;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 17px;
+}
+
+.timeline-expand:hover,
+.timeline-expand:focus-visible { border-color: var(--green); background: #eef6ee; }
+
 .timeline-label .code { margin-bottom: 1px; }
 .timeline-label strong { font-size: 12px; }
 .timeline-label small {
@@ -189,6 +209,9 @@ main,
 .timeline-row.summary .timeline-label {
   background: #f1f7ef;
 }
+
+.timeline-row.project-summary .timeline-label strong { font-weight: 800; }
+.timeline-row.project-summary .timeline-label { padding-left: 40px; }
 
 .timeline-row.summary .timeline-label strong { color: var(--green); }
 
@@ -370,5 +393,7 @@ main,
   .timeline-row { grid-template-columns: 150px var(--timeline-width); }
   .timeline-chart { width: calc(150px + var(--timeline-width)); }
   .timeline-label { padding-left: calc(9px + var(--timeline-depth) * 8px); }
+  .timeline-row.project-summary .timeline-label { padding-left: 34px; }
+  .timeline-row.project-summary .timeline-expand { left: 9px; }
   .timeline-unscheduled-list { grid-template-columns: 1fr; }
 }

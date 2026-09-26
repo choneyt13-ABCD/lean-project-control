@@ -888,67 +888,7 @@ ON CONFLICT (task_id) DO UPDATE SET
   evidence_required = EXCLUDED.evidence_required,
   workstream = EXCLUDED.workstream;
 INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('fb337921-de65-4b7f-a18b-e6c0d31bd9db', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-041', 'MainTask', 'Requirement', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
-ON CONFLICT (task_id) DO UPDATE SET
-  task_code = EXCLUDED.task_code,
-  task_name = EXCLUDED.task_name,
-  description = EXCLUDED.description,
-  parent_task_id = EXCLUDED.parent_task_id,
-  wbs_item_id = EXCLUDED.wbs_item_id,
-  task_type = EXCLUDED.task_type,
-  owner_person_id = EXCLUDED.owner_person_id,
-  planned_start_date = EXCLUDED.planned_start_date,
-  planned_due_date = EXCLUDED.planned_due_date,
-  actual_start_date = EXCLUDED.actual_start_date,
-  actual_end_date = EXCLUDED.actual_end_date,
-  status = EXCLUDED.status,
-  rag_status = EXCLUDED.rag_status,
-  weight = EXCLUDED.weight,
-  progress = EXCLUDED.progress,
-  evidence_required = EXCLUDED.evidence_required,
-  workstream = EXCLUDED.workstream;
-INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('2e44ed6f-040d-44a8-b8c2-a313318710d2', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-042', 'MainTask', 'SIT', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
-ON CONFLICT (task_id) DO UPDATE SET
-  task_code = EXCLUDED.task_code,
-  task_name = EXCLUDED.task_name,
-  description = EXCLUDED.description,
-  parent_task_id = EXCLUDED.parent_task_id,
-  wbs_item_id = EXCLUDED.wbs_item_id,
-  task_type = EXCLUDED.task_type,
-  owner_person_id = EXCLUDED.owner_person_id,
-  planned_start_date = EXCLUDED.planned_start_date,
-  planned_due_date = EXCLUDED.planned_due_date,
-  actual_start_date = EXCLUDED.actual_start_date,
-  actual_end_date = EXCLUDED.actual_end_date,
-  status = EXCLUDED.status,
-  rag_status = EXCLUDED.rag_status,
-  weight = EXCLUDED.weight,
-  progress = EXCLUDED.progress,
-  evidence_required = EXCLUDED.evidence_required,
-  workstream = EXCLUDED.workstream;
-INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('3e3e04bf-67d0-406e-9054-d14605184f6a', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-043', 'MainTask', 'UAT', NULL, '20000000-0000-0000-0000-000000000002', NULL, NULL, NULL, NULL, 'Done', 'Green', 1, 100, false, NULL)
-ON CONFLICT (task_id) DO UPDATE SET
-  task_code = EXCLUDED.task_code,
-  task_name = EXCLUDED.task_name,
-  description = EXCLUDED.description,
-  parent_task_id = EXCLUDED.parent_task_id,
-  wbs_item_id = EXCLUDED.wbs_item_id,
-  task_type = EXCLUDED.task_type,
-  owner_person_id = EXCLUDED.owner_person_id,
-  planned_start_date = EXCLUDED.planned_start_date,
-  planned_due_date = EXCLUDED.planned_due_date,
-  actual_start_date = EXCLUDED.actual_start_date,
-  actual_end_date = EXCLUDED.actual_end_date,
-  status = EXCLUDED.status,
-  rag_status = EXCLUDED.rag_status,
-  weight = EXCLUDED.weight,
-  progress = EXCLUDED.progress,
-  evidence_required = EXCLUDED.evidence_required,
-  workstream = EXCLUDED.workstream;
-INSERT INTO tasks (task_id, project_id, wbs_item_id, parent_task_id, task_code, task_type, task_name, description, owner_person_id, planned_start_date, planned_due_date, actual_start_date, actual_end_date, status, rag_status, weight, progress, evidence_required, workstream)
-VALUES ('89db308d-ac51-4d47-ada0-25ef1f9ac464', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', NULL, 'EDOC-044', 'MainTask', 'Golive', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-08-30', '2026-08-30', NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
+VALUES ('89db308d-ac51-4d47-ada0-25ef1f9ac464', '6d4495b9-4fb0-460d-af51-3f4e891d0cbf', '2e3ded9d-d5ea-4857-99a1-b9b75019aa94', 'c64c8721-08d1-49c4-a803-a4fb784b69fe', 'EDOC-044', 'Task', 'Golive', NULL, '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', '2026-08-30', '2026-08-30', NULL, NULL, 'NotStarted', 'Green', 1, 0, false, NULL)
 ON CONFLICT (task_id) DO UPDATE SET
   task_code = EXCLUDED.task_code,
   task_name = EXCLUDED.task_name,
@@ -2950,15 +2890,6 @@ VALUES ('5af9bdf1-981e-43fb-8e00-df1c0945f84b', '8a9a232e-5d0f-4bf0-a873-b2b0660
 ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
 VALUES ('276454f4-c418-44e0-9304-2f24741715ef', 'a2373c35-92fe-4494-9b79-bec59a38c06a', '2d0a827b-6cc7-4611-9a5f-e0ffa54a84bc', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('b076fe0b-fee0-412e-97c4-936b1ab82674', 'fb337921-de65-4b7f-a18b-e6c0d31bd9db', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('9a914d2c-949f-44a0-b0c4-8082f558adc6', '2e44ed6f-040d-44a8-b8c2-a313318710d2', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
-ON CONFLICT (task_assignment_id) DO NOTHING;
-INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
-VALUES ('ca5c3d03-8f80-4875-a7d6-5d9756ea41e7', '3e3e04bf-67d0-406e-9054-d14605184f6a', '20000000-0000-0000-0000-000000000002', 'Owner', 'Accountable', true)
 ON CONFLICT (task_assignment_id) DO NOTHING;
 INSERT INTO task_assignments (task_assignment_id, task_id, person_id, assignment_role, raci_role, is_primary)
 VALUES ('cd347d7a-4abb-44f5-bd41-127d15112260', '89db308d-ac51-4d47-ada0-25ef1f9ac464', '685a6439-7f6f-4fb1-8e8d-bf1ab6ec69af', 'Owner', 'Accountable', true)

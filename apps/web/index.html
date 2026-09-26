@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Control</title>
-    <link rel="stylesheet" href="/styles.css?v=project-portal-1" />
+    <link rel="stylesheet" href="/styles.css?v=project-portal-2" />
     <link rel="stylesheet" href="/restored.css?v=layout-2" />
     <link rel="stylesheet" href="/admin.css?v=layout-2" />
     <link rel="stylesheet" href="/modal.css?v=layout-2" />
@@ -35,6 +35,13 @@
     </div>
     <dialog id="modal" aria-modal="true"><form method="dialog" id="modal-form"><button class="close" type="button" data-close-modal aria-label="Close modal">×</button><div id="modal-content"></div></form></dialog>
     <div class="toast" id="toast"></div>
-    <script type="module" src="/app.js?v=project-portal-3"></script>
+    <script>
+      (() => {
+        const removeWorkItemBadge = () => document.querySelectorAll('.nav[data-page="tasks"] .nav-notification-badge').forEach((badge) => badge.remove());
+        removeWorkItemBadge();
+        new MutationObserver(removeWorkItemBadge).observe(document.body, { childList: true, subtree: true });
+      })();
+    </script>
+    <script type="module" src="/app.js?v=project-portal-4"></script>
   </body>
 </html>

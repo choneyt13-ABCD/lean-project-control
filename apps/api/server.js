@@ -820,6 +820,37 @@ function syncAllParentTaskProgress() {
   }
 }
 
+// Remove superseded E-Doc root items. Their replacement Tasks now live under
+// "ISO All Series"; retaining both versions makes the project tree duplicate
+// Requirement, SIT, and UAT.
+function removeSupersededEdocRootTasks() {
+  const project = db.prepare(`SELECT project_id, main_pm_person_id FROM projects
+    WHERE project_code = 'EDOC-2026' AND deleted_at IS NULL`).get();
+  if (!project) return;
+
+  const tasksToRemove = db.prepare(`SELECT * FROM tasks
+    WHERE project_id = ? AND task_code IN ('EDOC-041', 'EDOC-042', 'EDOC-043')
+      AND deleted_at IS NULL`).all(project.project_id);
+  if (!tasksToRemove.length) return;
+
+  db.transaction(() => {
+    const parentIds = new Set();
+    for (const task of tasksToRemove) {
+      db.prepare('UPDATE task_assignments SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE task_id = ? AND deleted_at IS NULL').run(task.task_id);
+      db.prepare('UPDATE weekly_updates SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE task_id = ? AND deleted_at IS NULL').run(task.task_id);
+      db.prepare('UPDATE weekly_plans SET task_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE task_id = ? AND deleted_at IS NULL').run(task.task_id);
+      db.prepare('UPDATE task_note_files SET deleted_at = CURRENT_TIMESTAMP WHERE task_note_id IN (SELECT task_note_id FROM task_notes WHERE task_id = ?) AND deleted_at IS NULL').run(task.task_id);
+      db.prepare('UPDATE task_notes SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE task_id = ? AND deleted_at IS NULL').run(task.task_id);
+      db.prepare('UPDATE tasks SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE task_id = ?').run(task.task_id);
+      if (task.parent_task_id) parentIds.add(task.parent_task_id);
+      audit('task.delete_superseded_edoc_item', 'Task', task.task_id, task, null, project.main_pm_person_id);
+    }
+    for (const parentId of parentIds) rollupTaskProgress(parentId);
+  })();
+}
+
+removeSupersededEdocRootTasks();
+
 app.decorateRequest('actor', null);
 app.decorateRequest('projectId', null);
 app.addHook('preHandler', async (request, reply) => {

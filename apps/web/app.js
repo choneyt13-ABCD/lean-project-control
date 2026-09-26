@@ -114,11 +114,9 @@ function isTaskUnread(taskId) { return Boolean(notificationState?.unreadIds?.som
 function renderNotificationBadge() {
   const nav = document.querySelector('.nav[data-page="tasks"]');
   if (!nav) return;
-  let badgeEl = nav.querySelector('.nav-notification-badge');
-  const count = notificationState?.unreadIds?.length || 0;
-  if (!count) { badgeEl?.remove(); return; }
-  if (!badgeEl) { badgeEl = document.createElement('span'); badgeEl.className = 'nav-notification-badge'; nav.appendChild(badgeEl); }
-  badgeEl.textContent = count > 99 ? '99+' : String(count);
+  // Keep update markers on the relevant task rows, but do not append an
+  // unexplained number to the Work items navigation label.
+  nav.querySelector('.nav-notification-badge')?.remove();
 }
 async function refreshUpdateNotifications() {
   try {

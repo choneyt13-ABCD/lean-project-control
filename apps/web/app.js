@@ -31,10 +31,15 @@ const collapsedTreeNodes = new Set();
 const collapsedTaskGroups = new Set();
 const collapsedParentTasks = new Set();
 
-const api = (path, options = {}) => fetch(`/api${path}`, {
-  ...options,
-  headers: { 'content-type': 'application/json', ...(activeProjectId ? { 'x-project-id': activeProjectId } : {}), ...(options.headers || {}) }
-}).then(async (response) => {
+const api = (path, options = {}) => {
+  const headers = { ...(activeProjectId ? { 'x-project-id': activeProjectId } : {}), ...(options.headers || {}) };
+  // A DELETE request has no JSON payload. Sending a JSON content type anyway
+  // makes Fastify try to parse an empty body and prevents the delete handler
+  // from running.
+  if (options.body !== undefined && !Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+    headers['content-type'] = 'application/json';
+  }
+  return fetch(`/api${path}`, { ...options, headers }).then(async (response) => {
   const raw = response.status === 204 ? '' : await response.text();
   let data = null;
   if (raw) {
@@ -42,7 +47,8 @@ const api = (path, options = {}) => fetch(`/api${path}`, {
   }
   if (!response.ok) throw new Error(data?.message || 'Unable to save data.');
   return data;
-});
+  });
+};
 
 const selected = (current, value) => current === value ? 'selected' : '';
 const badge = (value) => {

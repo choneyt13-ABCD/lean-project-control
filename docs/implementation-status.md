@@ -18,7 +18,7 @@ The repository is a working single-user feasibility walkthrough. It is suitable 
 - Local request identity resolution from active `user_accounts`, exposed through `/api/session`.
 - Request-actor ownership and Audit Log attribution instead of hard-coded mutation actors.
 - Project-scoped Workload (`/api/workload`) summarizing capacity, status, due dates, and blockers for the active project.
-- Project-scoped Excel project-plan export from the Work items page. The downloaded workbook contains the selected project's summary, phase hierarchy, work items, dates, progress, and Gantt timeline.
+- Project-scoped Excel project-plan export from the Work items page. The downloaded workbook contains the selected project's summary, phase hierarchy, each WBS heading with its work items, dates, progress, and Gantt timeline.
 - Portfolio-level All Projects Workload (`/api/workload/all-projects`) aggregating cross-project member capacity, person-project matrix, and task drill-down.
 - All Projects workload visibility is currently a local feasibility behavior for walkthrough and planning; RBAC and portfolio-level visibility rules will be enforced in a subsequent step.
 - Isolated API smoke tests that do not modify the local demo database.

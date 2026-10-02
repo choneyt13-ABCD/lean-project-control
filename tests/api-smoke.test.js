@@ -50,9 +50,10 @@ test('serves the walkthrough and all read endpoints', async () => {
 });
 
 test('exports a project-scoped Excel plan with its Gantt timeline', async () => {
-  const [project, tasks] = await Promise.all([
+  const [project, tasks, wbs] = await Promise.all([
     fetch(`${baseUrl}/api/project`).then((response) => response.json()),
-    fetch(`${baseUrl}/api/tasks`).then((response) => response.json())
+    fetch(`${baseUrl}/api/tasks`).then((response) => response.json()),
+    fetch(`${baseUrl}/api/wbs`).then((response) => response.json())
   ]);
   const response = await fetch(`${baseUrl}/api/exports/project-plan.xlsx`);
   assert.equal(response.status, 200);
@@ -65,6 +66,9 @@ test('exports a project-scoped Excel plan with its Gantt timeline', async () => 
   const values = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }).flat();
   assert.match(String(sheet.A1.v), new RegExp(project.project_code));
   assert.ok(values.includes(tasks[0].task_code));
+  for (const wbsCode of new Set(wbs.filter((item) => tasks.some((task) => task.wbs_code === item.wbs_code)).map((item) => item.wbs_code))) {
+    assert.ok(values.some((value) => String(value).startsWith(`${wbsCode}  `)), `missing WBS heading ${wbsCode}`);
+  }
   assert.ok(sheet['I10']);
   assert.ok(sheet['I11']);
 });

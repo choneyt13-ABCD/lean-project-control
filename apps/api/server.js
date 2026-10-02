@@ -970,7 +970,12 @@ function projectPlanWorkbook(scopedProjectId) {
   const sheet = {};
   const setCell = (row, col, value, style = {}, numberFormat) => {
     const address = XLSX.utils.encode_cell({ r: row, c: col });
-    const cell = value instanceof Date ? { t: 'n', v: dateToExcelSerial(value) } : { v: value };
+    const safeValue = value == null || (typeof value === 'number' && Number.isNaN(value)) ? '' : value;
+    const cell = safeValue === ''
+      ? { t: 's', v: '' }
+      : safeValue instanceof Date
+      ? { t: 'n', v: dateToExcelSerial(safeValue) }
+      : { v: safeValue };
     if (numberFormat) cell.z = numberFormat;
     if (Object.keys(style).length) cell.s = style;
     sheet[address] = cell;
@@ -1038,7 +1043,30 @@ function projectPlanWorkbook(scopedProjectId) {
     for (let day = 0; day < timelineDays; day += 1) setCell(currentRow, timelineColumnsStart + day, '', phaseStyle);
     currentRow += 1;
 
+    const wbsGroups = [];
+    const wbsMap = new Map();
     group.items.forEach((item) => {
+      const key = item.wbs_item_id || 'unassigned';
+      if (!wbsMap.has(key)) {
+        const wbs = { code: item.wbs_code || 'UNASSIGNED', name: item.wbs_name || 'Unassigned WBS', items: [] };
+        wbsMap.set(key, wbs);
+        wbsGroups.push(wbs);
+      }
+      wbsMap.get(key).items.push(item);
+    });
+
+    wbsGroups.forEach((wbs) => {
+      const wbsProgress = Math.round(wbs.items.reduce((sum, item) => sum + Number(item.progress || 0), 0) / wbs.items.length);
+      const wbsStyle = { fill: { fgColor: { rgb: 'D9EAD3' } }, font: { name: 'Arial', bold: true, sz: 9, color: { rgb: '285943' } }, alignment: { vertical: 'center' }, border: { bottom: { style: 'thin', color: { rgb: 'B7CDB7' } } } };
+      setCell(currentRow, 0, 'WBS', wbsStyle);
+      setCell(currentRow, 1, `${wbs.code}  ${wbs.name}`, wbsStyle);
+      for (let col = 2; col <= 5; col += 1) setCell(currentRow, col, '', wbsStyle);
+      setCell(currentRow, 6, wbsProgress / 100, { ...wbsStyle, alignment: { horizontal: 'right', vertical: 'center' } }, '0%');
+      setCell(currentRow, 7, `${wbs.items.length} items`, { ...wbsStyle, alignment: { horizontal: 'center', vertical: 'center' } });
+      for (let day = 0; day < timelineDays; day += 1) setCell(currentRow, timelineColumnsStart + day, '', wbsStyle);
+      currentRow += 1;
+
+      wbs.items.forEach((item) => {
       const indent = item.task_type === 'Subtask' ? '        ' : item.task_type === 'Task' ? '    ' : '';
       const taskStart = asDate(item.planned_start_date);
       const taskEnd = asDate(item.planned_due_date);
@@ -1060,6 +1088,7 @@ function projectPlanWorkbook(scopedProjectId) {
         }
       }
       currentRow += 1;
+    });
     });
   });
 
@@ -1168,6 +1197,7 @@ async function renderedProjectPlanBuffer(scopedProjectId) {
   for (let row = 12; row <= lastRow; row += 1) {
     const codeCell = sheet.getCell(row, 1);
     const isPhase = /^\d+$/.test(String(codeCell.value ?? ''));
+    const isWbs = String(codeCell.value ?? '') === 'WBS';
     if (isPhase) {
       phaseIndex += 1;
       activePhaseColor = phaseColors[phaseIndex % phaseColors.length];
@@ -1176,6 +1206,17 @@ async function renderedProjectPlanBuffer(scopedProjectId) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${activePhaseColor}` } };
         cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FFFFFFFF' } };
         cell.alignment = { vertical: 'middle', horizontal: column === 7 ? 'right' : 'left' };
+      }
+      sheet.getCell(row, 7).numFmt = '0%';
+      continue;
+    }
+    if (isWbs) {
+      for (let column = 1; column <= sheet.columnCount; column += 1) {
+        const cell = sheet.getCell(row, column);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAD3' } };
+        cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF285943' } };
+        cell.alignment = { vertical: 'middle', horizontal: column === 7 ? 'right' : column === 8 ? 'center' : 'left' };
+        cell.border = { bottom: { style: 'thin', color: { argb: 'FFB7CDB7' } } };
       }
       sheet.getCell(row, 7).numFmt = '0%';
       continue;

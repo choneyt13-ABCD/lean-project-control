@@ -49,6 +49,26 @@ test('serves the walkthrough and all read endpoints', async () => {
   assert.equal(dashboard.completed, 1);
 });
 
+test('exports a project-scoped Excel plan with its Gantt timeline', async () => {
+  const [project, tasks] = await Promise.all([
+    fetch(`${baseUrl}/api/project`).then((response) => response.json()),
+    fetch(`${baseUrl}/api/tasks`).then((response) => response.json())
+  ]);
+  const response = await fetch(`${baseUrl}/api/exports/project-plan.xlsx`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') || '', /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+  assert.match(response.headers.get('content-disposition') || '', /Project Plan/);
+
+  const workbook = XLSX.read(Buffer.from(await response.arrayBuffer()), { type: 'buffer', cellDates: true });
+  assert.deepEqual(workbook.SheetNames, ['Project plan']);
+  const sheet = workbook.Sheets['Project plan'];
+  const values = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }).flat();
+  assert.match(String(sheet.A1.v), new RegExp(project.project_code));
+  assert.ok(values.includes(tasks[0].task_code));
+  assert.ok(sheet['I10']);
+  assert.ok(sheet['I11']);
+});
+
 test('separates portfolio metrics and tasks by project', async () => {
   const projects = await fetch(`${baseUrl}/api/portfolio`).then((response) => response.json());
   assert.equal(projects.length, 2);

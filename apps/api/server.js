@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import Database from 'better-sqlite3';
+import ExcelJS from 'exceljs';
 import XLSX from 'xlsx';
 
 const fileName = fileURLToPath(import.meta.url);
@@ -901,6 +902,319 @@ function taskRows(scopedProjectId) {
     GROUP BY t.task_id ORDER BY COALESCE(ph.sort_order, 9999), w.sort_order, t.task_code`).all(scopedProjectId);
 }
 
+function asDate(value) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toIsoDate(value) {
+  const date = asDate(value);
+  return date ? date.toISOString().slice(0, 10) : '';
+}
+
+function daysBetweenInclusive(startDate, endDate) {
+  const start = asDate(startDate);
+  const end = asDate(endDate);
+  if (!start || !end || end < start) return null;
+  return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+function mondayOnOrBefore(value) {
+  const date = asDate(value) || new Date();
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() - day + 1);
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+function dateToExcelSerial(value) {
+  const date = value instanceof Date ? value : asDate(value);
+  if (!date) return null;
+  const utcMidnight = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return Math.floor((utcMidnight - Date.UTC(1899, 11, 30)) / 86400000);
+}
+
+function projectPlanWorkbook(scopedProjectId) {
+  const project = db.prepare(`SELECT p.*, pm.display_name AS main_pm_name
+    FROM projects p JOIN people pm ON pm.person_id = p.main_pm_person_id
+    WHERE p.project_id = ? AND p.deleted_at IS NULL`).get(scopedProjectId);
+  if (!project) return null;
+
+  const phases = db.prepare(`SELECT * FROM project_phases
+    WHERE project_id = ? AND deleted_at IS NULL ORDER BY sort_order, phase_code`).all(scopedProjectId);
+  const workItems = taskRows(scopedProjectId);
+  const datedItems = workItems.flatMap((item) => [item.planned_start_date, item.planned_due_date]).filter(Boolean).sort();
+  const planStart = project.start_date || datedItems[0] || new Date().toISOString().slice(0, 10);
+  const planEnd = project.target_end_date || datedItems[datedItems.length - 1] || planStart;
+  const timelineStart = mondayOnOrBefore(planStart);
+  const timelineEnd = asDate(planEnd) && asDate(planEnd) > timelineStart ? asDate(planEnd) : timelineStart;
+  const daysInProject = Math.floor((timelineEnd.getTime() - timelineStart.getTime()) / 86400000) + 1;
+  const timelineDays = Math.max(364, Math.ceil(daysInProject / 7) * 7);
+  const timelineColumnsStart = 8;
+  const topHeaderRow = 8;
+  const dateHeaderRow = 9;
+  const dayHeaderRow = 10;
+  const bodyStartRow = 11;
+  const overallProgress = workItems.length
+    ? Math.round(workItems.reduce((sum, item) => sum + Number(item.progress || 0), 0) / workItems.length)
+    : 0;
+
+  const workbook = XLSX.utils.book_new();
+  const sheet = {};
+  const setCell = (row, col, value, style = {}, numberFormat) => {
+    const address = XLSX.utils.encode_cell({ r: row, c: col });
+    const cell = value instanceof Date ? { t: 'n', v: dateToExcelSerial(value) } : { v: value };
+    if (numberFormat) cell.z = numberFormat;
+    if (Object.keys(style).length) cell.s = style;
+    sheet[address] = cell;
+  };
+  const dateStyle = { alignment: { horizontal: 'center' }, font: { name: 'Arial', sz: 9, color: { rgb: '404040' } } };
+  const titleStyle = { font: { name: 'Arial', bold: true, sz: 20, color: { rgb: '243C32' } }, alignment: { horizontal: 'left', vertical: 'center' } };
+  const labelStyle = { font: { name: 'Arial', bold: true, sz: 10, color: { rgb: '637069' } }, alignment: { vertical: 'center' } };
+  const valueStyle = { font: { name: 'Arial', bold: true, sz: 11, color: { rgb: '1E5942' } }, alignment: { vertical: 'center' } };
+  const tableHeaderStyle = { fill: { fgColor: { rgb: 'E7EAE7' } }, font: { name: 'Arial', bold: true, sz: 9, color: { rgb: '26342B' } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: { bottom: { style: 'thin', color: { rgb: 'BFC9C1' } } } };
+  const bodyStyle = { font: { name: 'Arial', sz: 9, color: { rgb: '404040' } }, alignment: { vertical: 'center' }, border: { bottom: { style: 'thin', color: { rgb: 'E5E9E5' } } } };
+  const phaseColors = ['A5A5A5', 'C55A11', '548235', 'C9A000', '2F75B5', 'ED7D31', '7F7F7F', '70AD47', 'BF9000'];
+
+  setCell(0, 0, `${project.project_code} : ${project.project_name}`, titleStyle);
+  const detailRows = [
+    ['PROJECT TITLE', project.project_name, 'TODAY\'S DATE', new Date()],
+    ['Project Manager', project.main_pm_name || '—', 'PROJECT START DATE', asDate(planStart)],
+    ['Percentage Complete', overallProgress / 100, 'PROJECT END DATE', asDate(planEnd)],
+    ['Project Type / Size', `${project.project_type || 'New'} (${project.project_size || 'Medium'})`, 'PROJECT WEEK', Math.max(1, Math.floor((Date.now() - timelineStart.getTime()) / (7 * 86400000)) + 1)]
+  ];
+  detailRows.forEach((row, index) => {
+    const targetRow = index + 2;
+    setCell(targetRow, 0, row[0], labelStyle);
+    setCell(targetRow, 1, row[1], row[0] === 'Percentage Complete' ? { ...valueStyle, fill: { fgColor: { rgb: 'E2F0D9' } } } : valueStyle, row[0] === 'Percentage Complete' ? '0%' : undefined);
+    setCell(targetRow, 4, row[2], labelStyle);
+    setCell(targetRow, 5, row[3], row[2].includes('DATE') ? dateStyle : valueStyle, row[2].includes('DATE') ? 'd mmm yy' : undefined);
+  });
+
+  setCell(topHeaderRow, 0, 'Service Req.', labelStyle);
+  setCell(topHeaderRow, 1, project.project_code, valueStyle);
+  setCell(topHeaderRow, 3, 'Project plan', labelStyle);
+  for (let day = 0; day < timelineDays; day += 1) {
+    const date = addDays(timelineStart, day);
+    const col = timelineColumnsStart + day;
+    if (day % 7 === 0) {
+      setCell(topHeaderRow, col, date, { ...tableHeaderStyle, fill: { fgColor: { rgb: 'F7F8F6' } }, font: { name: 'Arial', bold: true, sz: 8, color: { rgb: '4F5D54' } } }, 'd mmm yyyy');
+      sheet['!merges'] = [...(sheet['!merges'] || []), { s: { r: topHeaderRow, c: col }, e: { r: topHeaderRow, c: col + 6 } }];
+    }
+    setCell(dateHeaderRow, col, date.getUTCDate(), tableHeaderStyle, '0');
+    setCell(dayHeaderRow, col, ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getUTCDay()], tableHeaderStyle);
+  }
+
+  const headings = ['Task No.', 'TASK TITLE', 'TASK OWNER', 'DURATION\n(DAYS)', 'START DATE', 'DUE DATE', 'PERCENTAGE OF\nTASK COMPLETE', 'STATUS'];
+  headings.forEach((heading, col) => setCell(dayHeaderRow, col, heading, tableHeaderStyle));
+
+  const rowsByPhase = new Map(phases.map((phase) => [phase.phase_id, []]));
+  const unassigned = [];
+  workItems.forEach((item) => {
+    const target = rowsByPhase.get(item.phase_id);
+    if (target) target.push(item); else unassigned.push(item);
+  });
+  const groups = [
+    ...phases.map((phase) => ({ phase, items: rowsByPhase.get(phase.phase_id) || [] })).filter((group) => group.items.length),
+    ...(unassigned.length ? [{ phase: { phase_code: 'UNASSIGNED', phase_name: 'Unassigned work items' }, items: unassigned }] : [])
+  ];
+
+  let currentRow = bodyStartRow;
+  groups.forEach((group, groupIndex) => {
+    const phaseColor = phaseColors[groupIndex % phaseColors.length];
+    const phaseProgress = Math.round(group.items.reduce((sum, item) => sum + Number(item.progress || 0), 0) / group.items.length);
+    const phaseStyle = { fill: { fgColor: { rgb: phaseColor } }, font: { name: 'Arial', bold: true, sz: 9, color: { rgb: 'FFFFFF' } }, alignment: { vertical: 'center' } };
+    setCell(currentRow, 0, groupIndex + 1, phaseStyle);
+    setCell(currentRow, 1, `${group.phase.phase_code}  ${group.phase.phase_name}`, phaseStyle);
+    setCell(currentRow, 6, phaseProgress / 100, { ...phaseStyle, alignment: { horizontal: 'right', vertical: 'center' } }, '0%');
+    for (let col = 2; col <= 7; col += 1) setCell(currentRow, col, col === 6 ? phaseProgress / 100 : '', phaseStyle, col === 6 ? '0%' : undefined);
+    for (let day = 0; day < timelineDays; day += 1) setCell(currentRow, timelineColumnsStart + day, '', phaseStyle);
+    currentRow += 1;
+
+    group.items.forEach((item) => {
+      const indent = item.task_type === 'Subtask' ? '        ' : item.task_type === 'Task' ? '    ' : '';
+      const taskStart = asDate(item.planned_start_date);
+      const taskEnd = asDate(item.planned_due_date);
+      const progressFill = Number(item.progress || 0) >= 100 ? 'C6E0B4' : Number(item.progress || 0) > 0 ? 'FFF2CC' : 'F2F2F2';
+      const taskStyle = { ...bodyStyle, alignment: { vertical: 'center', wrapText: true } };
+      setCell(currentRow, 0, item.task_code, taskStyle);
+      setCell(currentRow, 1, `${indent}${item.task_name}`, taskStyle);
+      setCell(currentRow, 2, item.owner_name || '—', taskStyle);
+      setCell(currentRow, 3, daysBetweenInclusive(item.planned_start_date, item.planned_due_date), { ...taskStyle, alignment: { horizontal: 'center', vertical: 'center' } }, '0');
+      setCell(currentRow, 4, taskStart, dateStyle, 'd mmm yy');
+      setCell(currentRow, 5, taskEnd, dateStyle, 'd mmm yy');
+      setCell(currentRow, 6, Number(item.progress || 0) / 100, { ...taskStyle, fill: { fgColor: { rgb: progressFill } }, alignment: { horizontal: 'center', vertical: 'center' } }, '0%');
+      setCell(currentRow, 7, item.status || 'Not started', { ...taskStyle, alignment: { horizontal: 'center', vertical: 'center' } });
+      if (taskStart && taskEnd) {
+        const taskStartIndex = Math.max(0, Math.floor((taskStart.getTime() - timelineStart.getTime()) / 86400000));
+        const taskEndIndex = Math.min(timelineDays - 1, Math.floor((taskEnd.getTime() - timelineStart.getTime()) / 86400000));
+        for (let day = taskStartIndex; day <= taskEndIndex; day += 1) {
+          setCell(currentRow, timelineColumnsStart + day, '', { fill: { fgColor: { rgb: phaseColor } }, border: { bottom: { style: 'thin', color: { rgb: 'E5E9E5' } } } });
+        }
+      }
+      currentRow += 1;
+    });
+  });
+
+  sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(currentRow - 1, dayHeaderRow), c: timelineColumnsStart + timelineDays - 1 } });
+  sheet['!merges'] = [
+    ...(sheet['!merges'] || []),
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+    { s: { r: 2, c: 1 }, e: { r: 2, c: 3 } },
+    { s: { r: 3, c: 1 }, e: { r: 3, c: 3 } },
+    { s: { r: 4, c: 1 }, e: { r: 4, c: 3 } },
+    { s: { r: 5, c: 1 }, e: { r: 5, c: 3 } },
+    { s: { r: 2, c: 5 }, e: { r: 2, c: 7 } },
+    { s: { r: 3, c: 5 }, e: { r: 3, c: 7 } },
+    { s: { r: 4, c: 5 }, e: { r: 4, c: 7 } },
+    { s: { r: 5, c: 5 }, e: { r: 5, c: 7 } }
+  ];
+  sheet['!cols'] = [
+    { wch: 18 }, { wch: 48 }, { wch: 18 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 16 }, { wch: 13 },
+    ...Array.from({ length: timelineDays }, () => ({ wch: 3 }))
+  ];
+  sheet['!rows'] = [
+    { hpt: 28 }, {}, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, { hpt: 20 }, {}, {}, { hpt: 18 }, { hpt: 18 }, { hpt: 32 },
+    ...Array.from({ length: Math.max(0, currentRow - bodyStartRow) }, () => ({ hpt: 21 }))
+  ];
+  sheet['!freeze'] = { xSplit: 0, ySplit: bodyStartRow };
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Project plan');
+  return workbook;
+}
+
+function excelDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === 'number') return new Date(Date.UTC(1899, 11, 30) + Math.round(value * 86400000));
+  if (typeof value === 'string') {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  return null;
+}
+
+async function renderedProjectPlanBuffer(scopedProjectId) {
+  const source = projectPlanWorkbook(scopedProjectId);
+  if (!source) return null;
+  const sourceBuffer = XLSX.write(source, { type: 'buffer', bookType: 'xlsx', cellDates: true });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(sourceBuffer);
+  const sheet = workbook.getWorksheet('Project plan');
+  const timelineStart = excelDate(sheet.getCell(9, 9).value);
+  const timelineDays = Math.max(0, sheet.columnCount - 8);
+  const lastRow = sheet.rowCount;
+  const phaseColors = ['A5A5A5', 'C55A11', '548235', 'C9A000', '2F75B5', 'ED7D31', '7F7F7F', '70AD47', 'BF9000'];
+  const border = { style: 'thin', color: { argb: 'FFE5E9E5' } };
+  const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7EAE7' } };
+  const labelFont = { name: 'Arial', bold: true, size: 10, color: { argb: 'FF637069' } };
+  const valueFont = { name: 'Arial', bold: true, size: 11, color: { argb: 'FF1E5942' } };
+
+  sheet.views = [{ state: 'frozen', ySplit: 11 }];
+  sheet.properties.defaultRowHeight = 18;
+  [18, 48, 18, 12, 21, 18, 16, 13].forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
+  for (let column = 9; column <= sheet.columnCount; column += 1) sheet.getColumn(column).width = 3;
+  sheet.getRow(1).height = 30;
+  sheet.getRow(11).height = 32;
+  sheet.getCell('A1').font = { name: 'Arial', bold: true, size: 20, color: { argb: 'FF243C32' } };
+  sheet.getCell('A1').alignment = { horizontal: 'left', vertical: 'middle' };
+  sheet.getCell('A1').border = { bottom: { style: 'thick', color: { argb: 'FF0B5394' } } };
+
+  for (let row = 3; row <= 6; row += 1) {
+    for (const column of [1, 5]) {
+      const cell = sheet.getCell(row, column);
+      cell.font = labelFont;
+      cell.alignment = { vertical: 'middle' };
+      cell.border = { bottom: border };
+    }
+    for (const column of [2, 6]) {
+      const cell = sheet.getCell(row, column);
+      cell.font = valueFont;
+      cell.alignment = { vertical: 'middle', horizontal: column === 6 ? 'right' : 'left' };
+      cell.border = { bottom: border };
+    }
+  }
+  sheet.getCell('B5').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2F0D9' } };
+  sheet.getCell('B5').numFmt = '0%';
+  for (const cellAddress of ['F3', 'F4', 'F5']) {
+    const cell = sheet.getCell(cellAddress);
+    const date = excelDate(cell.value);
+    if (date) cell.value = date;
+    cell.numFmt = 'd mmm yy';
+  }
+
+  for (let column = 1; column <= sheet.columnCount; column += 1) {
+    const dateHeader = sheet.getCell(10, column);
+    const weekdayHeader = sheet.getCell(11, column);
+    weekdayHeader.fill = headerFill;
+    weekdayHeader.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FF26342B' } };
+    weekdayHeader.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    weekdayHeader.border = { bottom: { style: 'thin', color: { argb: 'FFBFC9C1' } } };
+    if (column >= 9) {
+      dateHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F8F6' } };
+      dateHeader.font = { name: 'Arial', bold: true, size: 8, color: { argb: 'FF4F5D54' } };
+      dateHeader.alignment = { horizontal: 'center', vertical: 'middle' };
+      dateHeader.numFmt = '0';
+    }
+  }
+
+  let phaseIndex = -1;
+  let activePhaseColor = phaseColors[0];
+  for (let row = 12; row <= lastRow; row += 1) {
+    const codeCell = sheet.getCell(row, 1);
+    const isPhase = /^\d+$/.test(String(codeCell.value ?? ''));
+    if (isPhase) {
+      phaseIndex += 1;
+      activePhaseColor = phaseColors[phaseIndex % phaseColors.length];
+      for (let column = 1; column <= sheet.columnCount; column += 1) {
+        const cell = sheet.getCell(row, column);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${activePhaseColor}` } };
+        cell.font = { name: 'Arial', bold: true, size: 9, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { vertical: 'middle', horizontal: column === 7 ? 'right' : 'left' };
+      }
+      sheet.getCell(row, 7).numFmt = '0%';
+      continue;
+    }
+
+    for (let column = 1; column <= sheet.columnCount; column += 1) {
+      const cell = sheet.getCell(row, column);
+      cell.font = { name: 'Arial', size: 9, color: { argb: 'FF404040' } };
+      cell.border = { bottom: border };
+      cell.alignment = { vertical: 'middle', wrapText: column === 2 };
+    }
+    for (const column of [5, 6]) {
+      const cell = sheet.getCell(row, column);
+      const date = excelDate(cell.value);
+      if (date) cell.value = date;
+      cell.numFmt = 'd mmm yy';
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    }
+    const progressCell = sheet.getCell(row, 7);
+    progressCell.numFmt = '0%';
+    progressCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    const progress = Number(progressCell.value || 0) * 100;
+    progressCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: progress >= 100 ? 'FFC6E0B4' : progress > 0 ? 'FFFFF2CC' : 'FFF2F2F2' } };
+    sheet.getCell(row, 4).alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getCell(row, 8).alignment = { horizontal: 'center', vertical: 'middle' };
+    const start = excelDate(sheet.getCell(row, 5).value);
+    const end = excelDate(sheet.getCell(row, 6).value);
+    if (timelineStart && start && end) {
+      const startIndex = Math.max(0, Math.floor((start.getTime() - timelineStart.getTime()) / 86400000));
+      const endIndex = Math.min(timelineDays - 1, Math.floor((end.getTime() - timelineStart.getTime()) / 86400000));
+      for (let day = startIndex; day <= endIndex; day += 1) {
+        const cell = sheet.getCell(row, 9 + day);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${activePhaseColor}` } };
+      }
+    }
+  }
+  return workbook.xlsx.writeBuffer();
+}
+
 app.post('/api/imports/preview', async (request, reply) => {
   try {
     const project = db.prepare('SELECT * FROM projects WHERE project_id = ? AND deleted_at IS NULL').get(request.projectId);
@@ -1184,6 +1498,18 @@ app.get('/api/dashboard', async (request) => {
 });
 
 app.get('/api/tasks', async (request) => taskRows(request.projectId));
+
+app.get('/api/exports/project-plan.xlsx', async (request, reply) => {
+  const buffer = await renderedProjectPlanBuffer(request.projectId);
+  if (!buffer) return reply.code(404).send({ message: 'Project not found.' });
+  const project = db.prepare('SELECT project_code FROM projects WHERE project_id = ?').get(request.projectId);
+  const fileCode = String(project?.project_code || 'project').replace(/[^a-zA-Z0-9_-]/g, '_');
+  reply
+    .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .header('content-disposition', `attachment; filename="Project Plan ${fileCode}.xlsx"; filename*=UTF-8''Project%20Plan%20${encodeURIComponent(fileCode)}.xlsx`)
+    .header('cache-control', 'no-store');
+  return reply.send(buffer);
+});
 
 app.get('/api/phases', async (request) => db.prepare(`SELECT p.*, COUNT(w.wbs_item_id) AS activity_count
   FROM project_phases p LEFT JOIN wbs_items w ON w.phase_id = p.phase_id AND w.deleted_at IS NULL

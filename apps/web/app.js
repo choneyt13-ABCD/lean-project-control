@@ -1,6 +1,7 @@
 const content = document.querySelector('#content');
 const title = document.querySelector('#page-title');
 const quickAction = document.querySelector('#quick-action');
+const downloadProjectPlanAction = document.querySelector('#download-project-plan');
 const modal = document.querySelector('#modal');
 const modalContent = document.querySelector('#modal-content');
 const form = document.querySelector('#modal-form');
@@ -49,6 +50,44 @@ const api = (path, options = {}) => {
   return data;
   });
 };
+
+async function downloadProjectPlan() {
+  const button = downloadProjectPlanAction;
+  const originalLabel = button?.textContent || '⇩ Download Excel';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Preparing Excel…';
+  }
+  try {
+    const response = await fetch('/api/exports/project-plan.xlsx', {
+      headers: activeProjectId ? { 'x-project-id': activeProjectId } : {}
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.message || 'Unable to prepare the Excel file.');
+    }
+    const disposition = response.headers.get('content-disposition') || '';
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+    const fileName = encodedName ? decodeURIComponent(encodedName) : (plainName || 'Project Plan.xlsx');
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+    showToast('Excel file downloaded.');
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+}
 
 const selected = (current, value) => current === value ? 'selected' : '';
 const badge = (value) => {
@@ -431,6 +470,7 @@ async function workBreakdown() {
           <span class="subtle">Operational workspace for managing deliverables, progress, and assignments.</span>
         </div>
         <div class="row-actions work-items-controls">
+          <button class="secondary" type="button" data-download-project-plan>⇩ Download Excel</button>
           <label class="group-filter-control">
             <span>Group by</span>
             <select data-task-group-by>${groupOptions}</select>
@@ -2718,6 +2758,7 @@ async function navigate(page) {
   document.querySelectorAll('.nav').forEach((nav) => nav.classList.toggle('active', nav.dataset.page === page));
   title.textContent = pageTitles[page];
   quickAction.style.display = ['dashboard', 'updates', 'project-control', 'portal', 'weekly-portal'].includes(page) ? 'none' : '';
+  if (downloadProjectPlanAction) downloadProjectPlanAction.hidden = page !== 'tasks';
   try {
     await pages[page]();
   } catch (error) {
@@ -3076,6 +3117,10 @@ document.addEventListener('click', (event) => {
 });
 
 quickAction.addEventListener('click', () => weeklyModal());
+  downloadProjectPlanAction?.addEventListener('click', downloadProjectPlan);
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-download-project-plan]')) downloadProjectPlan();
+});
 async function initialize() {
   try {
     const session = await api('/session');

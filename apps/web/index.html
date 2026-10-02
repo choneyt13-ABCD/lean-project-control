@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Control</title>
-    <link rel="stylesheet" href="/styles.css?v=project-portal-2" />
+    <link rel="stylesheet" href="/styles.css?v=project-portal-3" />
     <link rel="stylesheet" href="/restored.css?v=layout-2" />
     <link rel="stylesheet" href="/admin.css?v=layout-2" />
     <link rel="stylesheet" href="/modal.css?v=layout-2" />
@@ -29,7 +29,7 @@
         <div class="demo-user"><div class="avatar">PM</div><div><strong>RRMS Demo PM</strong><small>Single-user demo mode</small></div></div>
       </aside>
       <main>
-        <header><div><p class="eyebrow">PROJECT CONTROL / SINGLE-USER WALKTHROUGH</p><h1 id="page-title">Project overview</h1></div><button class="primary" id="quick-action">+ Add weekly update</button></header>
+        <header><div><p class="eyebrow">PROJECT CONTROL / SINGLE-USER WALKTHROUGH</p><h1 id="page-title">Project overview</h1></div><div class="header-actions"><button class="secondary" id="download-project-plan" type="button" hidden>⇩ Download Excel</button><button class="primary" id="quick-action">+ Add weekly update</button></div></header>
         <section id="content" aria-live="polite"></section>
       </main>
     </div>
@@ -42,6 +42,6 @@
         new MutationObserver(removeWorkItemBadge).observe(document.body, { childList: true, subtree: true });
       })();
     </script>
-    <script type="module" src="/app.js?v=project-portal-5"></script>
+    <script type="module" src="/app.js?v=project-portal-6"></script>
   </body>
 </html>

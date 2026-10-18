@@ -212,12 +212,52 @@ function contextBar(current, projects) {
 }
 
 async function overview() {
-  const data = await api(`/master-control?weekStart=${controlWeek}`);
-  const s = data.summary;
-  content.innerHTML = `<section class="control-hero"><div><span class="section-kicker">MASTER PROJECT CONTROL</span><h2>Overall delivery control</h2><p>One view of every project you hold, this week's commitments, role updates, and delivery attention.</p></div><label class="week-control"><span>Week starting</span><input type="date" value="${data.weekStart}" data-control-week></label></section>
-  <div class="cards"><div class="card"><p>Projects held</p><div class="metric">${s.projectCount}</div><p>${s.completed} of ${s.taskCount} work items done</p></div><div class="card"><p>Portfolio progress</p><div class="metric">${s.progress}%</div><div class="progress"><span style="width:${s.progress}%"></span></div></div><div class="card"><p>Weekly plan</p><div class="metric">${s.planDone}<span class="subtle"> / ${s.planCount}</span></div><p>commitments completed</p></div><div class="card"><p>Needs attention</p><div class="metric">${s.blocked + s.overdue}</div><p>${s.blocked} blocked &middot; ${s.overdue} overdue</p></div></div>
-  <section class="panel"><div class="panel-head"><div><h2>Project master report</h2><span class="subtle">Live totals calculated from the source work items, RAID, plans, and updates.</span></div><button class="secondary" data-go="portfolio">Open portfolio</button></div><div class="table-wrap"><table class="table master-table"><thead><tr><th>PROJECT</th><th>TYPE / SIZE</th><th>PM</th><th>PROGRESS</th><th>HEALTH</th><th>WEEKLY PLAN</th><th>ROLE UPDATES</th><th>ATTENTION</th><th></th></tr></thead><tbody>${data.projects.map((project) => `<tr><td><span class="code">${project.project_code}</span><strong>${project.project_name}</strong></td><td>${typeBadge(project.project_type)} ${sizeBadge(project.project_size)}</td><td>${project.main_pm_name}</td><td><strong>${project.progress}%</strong><div class="progress compact"><span style="width:${project.progress}%"></span></div></td><td>${badge(project.calculatedRag)}</td><td>${project.planDone} / ${project.planCount}</td><td>${project.roleUpdateCount}</td><td>${project.blocked + project.overdue ? `<span class="attention-count">${project.blocked + project.overdue}</span>` : '<span class="badge green">Clear</span>'}</td><td><button class="secondary" data-select-project="${project.project_id}" data-go="updates">Manage</button></td></tr>`).join('')}</tbody></table></div></section>
-  <div class="two-col control-columns"><section class="panel"><div class="panel-head"><div><h2>This week's commitments</h2><span class="subtle">Plan versus actual across projects.</span></div><button class="secondary" data-go="updates">Open weekly workspace</button></div>${data.plans.length ? data.plans.slice(0, 8).map((item) => `<article class="control-list-row"><div><span class="code">${item.project_code}${item.task_code ? ` &middot; ${item.task_code}` : ''}</span><strong>${item.plan_title}</strong><small>${item.owner_name}${item.owner_role ? ` &middot; ${item.owner_role}` : ''}</small></div>${badge(item.status)}</article>`).join('') : '<p class="empty">No commitments planned for this week yet.</p>'}</section><section class="panel"><div class="panel-head"><div><h2>Role movement updates</h2><span class="subtle">A concise update by person and role.</span></div></div>${data.roleUpdates.length ? data.roleUpdates.slice(0, 8).map((item) => `<article class="control-list-row"><div><span class="code">${item.project_code} &middot; ${item.role_name}</span><strong>${item.display_name}</strong><small>${item.accomplished || item.next_actions || item.blocker || item.support_needed}</small></div>${item.blocker ? '<span class="badge red">Blocker</span>' : '<span class="badge green">Updated</span>'}</article>`).join('') : '<p class="empty">No role updates recorded for this week.</p>'}</section></div>`;
+  const [{ current, projects }, workItems, plans, raids] = await Promise.all([
+    projectContext(),
+    api('/tasks'),
+    api('/weekly-plans'),
+    api('/raid')
+  ]);
+  tasks = workItems;
+  weeklyPlans = plans;
+  raidItems = raids;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayIso = today.toISOString().slice(0, 10);
+  // Historic imports can contain a 100% item whose status was not normalized to Done.
+  // Treat it as complete here so the command queue stays focused on work that remains.
+  const openItems = workItems.filter((item) => !['Done', 'Cancelled'].includes(item.status) && Number(item.progress || 0) < 100);
+  const completed = workItems.filter((item) => item.status === 'Done' || Number(item.progress || 0) === 100).length;
+  const progress = workItems.length ? Math.round(workItems.reduce((sum, item) => sum + Number(item.progress || 0), 0) / workItems.length) : 0;
+  const isOverdue = (item) => item.planned_due_date && item.planned_due_date < todayIso;
+  const needsAttention = openItems.filter((item) => ['Blocked', 'OnHold'].includes(item.status) || item.rag_status === 'Red' || isOverdue(item));
+  const dueSoon = openItems.filter((item) => item.planned_due_date && item.planned_due_date >= todayIso)
+    .sort((left, right) => left.planned_due_date.localeCompare(right.planned_due_date));
+  const actionQueue = [...needsAttention, ...dueSoon.filter((item) => !needsAttention.includes(item))].slice(0, 6);
+  const openRaids = raids.filter((item) => item.status !== 'Closed');
+  const planDone = plans.filter((item) => item.status === 'Done').length;
+  const labelDate = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) : 'ยังไม่กำหนด';
+  const taskState = (item) => {
+    if (['Blocked', 'OnHold'].includes(item.status) || item.rag_status === 'Red') return '<span class="badge red">ต้องจัดการ</span>';
+    if (isOverdue(item)) return '<span class="badge amber">เกินกำหนด</span>';
+    return badge(item.status);
+  };
+  const actionRow = (item) => `<article class="command-item ${isOverdue(item) || item.rag_status === 'Red' ? 'is-urgent' : ''}">
+    <div class="command-item-status">${taskState(item)}</div>
+    <div class="command-item-copy"><span class="code">${escapeHtml(item.task_code || 'WORK ITEM')} · ${escapeHtml(item.owner_name || 'ยังไม่ระบุผู้รับผิดชอบ')}</span><strong>${escapeHtml(item.task_name)}</strong><small>กำหนดส่ง ${labelDate(item.planned_due_date)} · ความคืบหน้า ${Number(item.progress || 0)}%</small></div>
+    <button class="secondary compact-btn" data-update-task="${item.task_id}">อัปเดต</button>
+  </article>`;
+  const planRow = (item) => `<article class="command-item compact">
+    <div class="command-item-status">${badge(item.status)}</div>
+    <div class="command-item-copy"><span class="code">${escapeHtml(item.owner_name || 'ยังไม่ระบุผู้รับผิดชอบ')}${item.owner_role ? ` · ${escapeHtml(item.owner_role)}` : ''}</span><strong>${escapeHtml(item.plan_title)}</strong><small>เป้าหมาย: ${escapeHtml(item.target_outcome || 'ยังไม่ระบุ')} · ส่ง ${labelDate(item.planned_due_date)}</small></div>
+  </article>`;
+
+  content.innerHTML = `${contextBar(current, projects)}
+  <section class="command-hero"><div><span class="section-kicker">COMMAND CENTER</span><h2>ภาพรวมเพื่อดำเนินการ</h2><p>เริ่มจากรายการที่มีผลต่อกำหนดส่งก่อน แล้วค่อยติดตามแผนประจำสัปดาห์และความเสี่ยงของโครงการ</p></div><div class="command-hero-actions"><label class="week-control"><span>สัปดาห์เริ่มต้น</span><input type="date" value="${controlWeek}" data-control-week></label><button class="primary" data-open-weekly-plan>+ เพิ่มแผนสัปดาห์</button></div></section>
+  <section class="command-kpis" aria-label="สรุปโครงการ"><article><span>ความคืบหน้าโครงการ</span><strong>${progress}%</strong><div class="progress"><span style="width:${progress}%"></span></div><small>เสร็จแล้ว ${completed} จาก ${workItems.length} รายการ</small></article><article class="${needsAttention.length ? 'warn' : ''}"><span>ต้องจัดการ</span><strong>${needsAttention.length}</strong><small>${needsAttention.filter(isOverdue).length} งานเกินกำหนด · ${openRaids.length} RAID เปิดอยู่</small></article><article><span>แผนสัปดาห์นี้</span><strong>${planDone}<em> / ${plans.length}</em></strong><small>งานตามแผนที่เสร็จแล้ว</small></article><article><span>กำหนดสิ้นสุดโครงการ</span><strong class="date-metric">${labelDate(current.target_end_date)}</strong><small>${escapeHtml(current.main_pm_name || 'ยังไม่ระบุ PM')}</small></article></section>
+  <div class="command-grid"><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">PRIORITY QUEUE</span><h2>สิ่งที่ต้องดำเนินการ</h2><span class="subtle">เรียงงานติดขัด งานเสี่ยง และงานที่ใกล้กำหนดส่ง</span></div><button class="secondary" data-go="tasks">ดูงานทั้งหมด</button></div>${actionQueue.length ? `<div class="command-list">${actionQueue.map(actionRow).join('')}</div>` : '<p class="empty">ไม่มีงานที่ต้องเร่งจัดการในขณะนี้</p>'}</section>
+  <aside class="command-side"><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">THIS WEEK</span><h2>คำมั่นสัญญาสัปดาห์นี้</h2></div><button class="secondary compact-btn" data-go="updates">จัดการ</button></div>${plans.length ? `<div class="command-list">${plans.slice(0, 4).map(planRow).join('')}</div>` : '<p class="empty">ยังไม่มีแผนสัปดาห์นี้</p>'}</section><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">PROJECT HEALTH</span><h2>สัญญาณที่ต้องติดตาม</h2></div><button class="secondary compact-btn" data-go="raid">เปิด RAID</button></div><div class="health-list"><div><span>งานติดขัด / พัก</span><strong>${openItems.filter((item) => ['Blocked', 'OnHold'].includes(item.status)).length}</strong></div><div><span>งานสถานะแดง</span><strong>${openItems.filter((item) => item.rag_status === 'Red').length}</strong></div><div><span>RAID ที่ยังเปิด</span><strong>${openRaids.length}</strong></div></div></section></aside></div>`;
 }
 
 async function portfolio() {

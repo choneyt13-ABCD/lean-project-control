@@ -260,6 +260,44 @@ async function overview() {
   <aside class="command-side"><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">THIS WEEK</span><h2>คำมั่นสัญญาสัปดาห์นี้</h2></div><button class="secondary compact-btn" data-go="updates">จัดการ</button></div>${plans.length ? `<div class="command-list">${plans.slice(0, 4).map(planRow).join('')}</div>` : '<p class="empty">ยังไม่มีแผนสัปดาห์นี้</p>'}</section><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">PROJECT HEALTH</span><h2>สัญญาณที่ต้องติดตาม</h2></div><button class="secondary compact-btn" data-go="raid">เปิด RAID</button></div><div class="health-list"><div><span>งานติดขัด / พัก</span><strong>${openItems.filter((item) => ['Blocked', 'OnHold'].includes(item.status)).length}</strong></div><div><span>งานสถานะแดง</span><strong>${openItems.filter((item) => item.rag_status === 'Red').length}</strong></div><div><span>RAID ที่ยังเปิด</span><strong>${openRaids.length}</strong></div></div></section></aside></div>`;
 }
 
+async function weeklyBrief() {
+  const data = await api(`/master-control?weekStart=${controlWeek}`);
+  const weekStart = new Date(`${data.weekStart}T00:00:00`);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const dateLabel = (date) => date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+  const currentProjects = data.projects.filter((project) => project.project_status !== 'Cancelled');
+  const carryOver = currentProjects.reduce((sum, project) => sum + project.overdue, 0);
+  const decisions = currentProjects.reduce((sum, project) => sum + project.blocked + project.openRaid, 0);
+  const plansByProject = new Map(currentProjects.map((project) => [project.project_id, data.plans.filter((plan) => plan.project_id === project.project_id)]));
+  const unitMap = new Map();
+  data.plans.forEach((plan) => {
+    const unit = plan.owner_role || plan.owner_name || 'ยังไม่ระบุหน่วยงาน';
+    if (!unitMap.has(unit)) unitMap.set(unit, []);
+    unitMap.get(unit).push(plan);
+  });
+  const focalProjects = currentProjects
+    .map((project) => ({ project, plans: plansByProject.get(project.project_id) || [] }))
+    .sort((left, right) => (right.project.blocked + right.project.openRaid + right.project.overdue) - (left.project.blocked + left.project.openRaid + left.project.overdue));
+  const projectRow = ({ project, plans }) => {
+    const attention = project.blocked + project.openRaid;
+    const focus = plans[0];
+    const state = attention ? '<span class="badge red">ต้องตัดสินใจ</span>' : project.overdue ? '<span class="badge amber">มีงานยกมา</span>' : '<span class="badge green">ตามแผน</span>';
+    const outcome = focus?.plan_title || (attention ? `จัดการ ${attention} เรื่องที่ต้องติดตาม` : project.taskCount ? 'ยืนยันเป้าหมายและคำมั่นสัญญาของสัปดาห์' : 'จัดทำโครงสร้างและแผนเริ่มต้น');
+    const owner = focus?.owner_name || project.main_pm_name || 'ยังไม่ระบุเจ้าของงาน';
+    const due = focus?.planned_due_date ? `ส่ง ${focus.planned_due_date}` : `เป้าหมายโครงการ ${project.target_end_date || 'ยังไม่กำหนด'}`;
+    return `<article class="weekly-project-row"><div><span class="code">${escapeHtml(project.project_code)}</span>${state}</div><div><strong>${escapeHtml(outcome)}</strong><small>${escapeHtml(project.project_name)} · เจ้าของ: ${escapeHtml(owner)}</small></div><div class="weekly-project-due"><strong>${escapeHtml(due)}</strong><small>${project.progress}% complete · ${project.planDone}/${project.planCount} แผนเสร็จ</small></div></article>`;
+  };
+  const unitRows = [...unitMap.entries()].sort((left, right) => right[1].length - left[1].length).slice(0, 5)
+    .map(([unit, plans]) => `<article class="weekly-unit-row"><div><strong>${escapeHtml(unit)}</strong><small>${plans.length} งานที่ต้องเตรียม</small></div><span>${plans.slice(0, 2).map((plan) => escapeHtml(plan.plan_title)).join(' · ')}</span></article>`).join('');
+  const carryRows = focalProjects.filter(({ project }) => project.overdue || project.blocked || project.openRaid).slice(0, 5)
+    .map(({ project }) => `<article class="weekly-carry-row"><span class="badge ${project.blocked || project.openRaid ? 'red' : 'amber'}">${escapeHtml(project.project_code)}</span><div><strong>${project.blocked + project.openRaid ? `${project.blocked + project.openRaid} เรื่องต้องตัดสินใจ` : `${project.overdue} งานยกมา`}</strong><small>${escapeHtml(project.project_name)} · ทบทวนเจ้าของงานและวันส่งใหม่</small></div></article>`).join('');
+  content.innerHTML = `<section class="weekly-brief-head"><div><span class="section-kicker">WEEKLY OPERATIONS BRIEF</span><h2>แผนปฏิบัติการประจำสัปดาห์</h2><p>เตรียมข้อมูลต้นสัปดาห์: สิ่งที่แต่ละหน่วยงานต้องทำ ผลลัพธ์ที่ต้องส่ง และเรื่องที่ต้องตัดสินใจ</p></div><div class="weekly-brief-actions"><label class="week-control"><span>สัปดาห์เริ่มต้น</span><input type="date" value="${data.weekStart}" data-control-week></label><button class="primary" data-go="updates">จัดทำแผนสัปดาห์</button></div></section>
+  <section class="weekly-outcome"><span>WEEKLY OUTCOME</span><strong>${data.plans.length ? `ส่งมอบคำมั่นสัญญา ${data.plans.length} รายการ และติดตาม ${decisions} เรื่องที่ต้องตัดสินใจ` : 'ยืนยันคำมั่นสัญญาและเจ้าของงานของทุกโครงการก่อนเริ่มสัปดาห์'}</strong><small>${dateLabel(weekStart)} – ${dateLabel(weekEnd)}</small></section>
+  <section class="weekly-metrics"><article><span>โครงการที่มีแผนสัปดาห์นี้</span><strong>${currentProjects.filter((project) => project.planCount > 0).length}</strong><small>จาก ${currentProjects.length} โครงการที่ดำเนินการอยู่</small></article><article><span>คำมั่นสัญญาของสัปดาห์</span><strong>${data.summary.planCount}</strong><small>${data.summary.planDone} รายการเสร็จแล้ว</small></article><article class="${decisions ? 'alert' : ''}"><span>เรื่องต้องตัดสินใจ</span><strong>${decisions}</strong><small>งานติดขัด และ RAID ที่ยังเปิด</small></article><article><span>งานยกมาจากสัปดาห์ก่อน</span><strong>${carryOver}</strong><small>ต้องยืนยันวันส่งและแผนแก้ไข</small></article></section>
+  <div class="weekly-brief-grid"><section class="panel"><div class="panel-head"><div><h2>เป้าหมายและงานสำคัญรายโครงการ</h2><span class="subtle">ผลลัพธ์ที่แต่ละโครงการต้องเตรียมและติดตามในสัปดาห์นี้</span></div><button class="secondary" data-go="project-control">ดูโครงการทั้งหมด</button></div><div class="weekly-project-list">${focalProjects.map(projectRow).join('')}</div></section><aside><section class="panel"><div class="panel-head"><div><h2>งานตามหน่วยงาน</h2><span class="subtle">ข้อมูลที่ต้องเตรียมก่อนประชุม</span></div></div>${unitRows || '<p class="empty">ยังไม่มีแผนรายสัปดาห์ — เพิ่มแผนพร้อมหน่วยงาน/บทบาทเจ้าของงานเพื่อสรุปส่วนนี้</p>'}</section><section class="panel"><div class="panel-head"><div><h2>งานยกมาและเรื่องต้องตัดสินใจ</h2><span class="subtle">ทบทวนก่อนเริ่มงานใหม่</span></div><button class="secondary compact-btn" data-go="raid">เปิด RAID</button></div>${carryRows || '<p class="empty">ไม่มีงานยกมาหรือเรื่องที่ต้องตัดสินใจ</p>'}</section></aside></div>`;
+}
+
 async function portfolio() {
   const projects = await api('/portfolio');
   content.innerHTML = `<section class="portfolio-intro"><div><span class="section-kicker">PORTFOLIO VIEW</span><h2>Project delivery at a glance</h2><p>Compare project health, then select one project to manage its work.</p></div><div class="portfolio-total"><strong>${projects.length}</strong><span>active projects</span></div></section><div class="portfolio-projects">${projects.map((project) => `<section class="panel portfolio-project"><div class="panel-head"><div><div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span class="code" style="margin-bottom:0">${project.project_code}</span>${typeBadge(project.project_type)}${sizeBadge(project.project_size)}</div><h2>${project.project_name}</h2><span class="subtle">${project.portfolio_name ? `${project.portfolio_name} &middot; ` : ''}Main PM: ${project.main_pm_name}</span></div><button class="secondary" data-select-project="${project.project_id}" data-go="tasks">Manage work items</button></div><div class="project-kpis"><div><span>Progress</span><strong>${project.progress}%</strong></div><div><span>Completed</span><strong>${project.completed} / ${project.taskCount}</strong></div><div><span>Open RAID</span><strong>${project.openRaid}</strong></div><div><span>High severity</span><strong>${project.highRaid}</strong></div></div></section>`).join('')}</div>`;
@@ -2778,8 +2816,8 @@ async function projectControlPortal() {
   content.insertAdjacentHTML('afterbegin', `<section class="portal-nav control-portal-nav"><div><span class="section-kicker">PROJECT PORTAL</span><strong>${labels[controlPortalSession]}</strong><small>${descriptions[controlPortalSession]}</small></div><div class="portal-tabs" aria-label="Project Portal views">${Object.entries(labels).map(([key, label]) => `<button class="${controlPortalSession === key ? 'active' : ''}" data-control-portal-session="${key}">${label}</button>`).join('')}</div></section>`);
 }
 
-const pages = { dashboard: overview, 'project-control': projectControlPortal, tasks: workBreakdown, updates: weeklyUpdatesEditable, actions: pmActions, raid: raidEditable, portal: projectPortal, 'weekly-portal': weeklyPortal, audit };
-const pageTitles = { dashboard: 'Master control', 'project-control': 'Project portal', tasks: 'Work items', updates: 'Weekly workspace', actions: 'Delivery attention', raid: 'RAID register', portal: 'Project portal setup', 'weekly-portal': 'Weekly Portal', audit: 'Activity log' };
+const pages = { dashboard: weeklyBrief, 'project-control': projectControlPortal, tasks: workBreakdown, updates: weeklyUpdatesEditable, actions: pmActions, raid: raidEditable, portal: projectPortal, 'weekly-portal': weeklyPortal, audit };
+const pageTitles = { dashboard: 'Weekly operations brief', 'project-control': 'Project portal', tasks: 'Work items', updates: 'Weekly workspace', actions: 'Delivery attention', raid: 'RAID register', portal: 'Project portal setup', 'weekly-portal': 'Weekly Portal', audit: 'Activity log' };
 
 async function navigate(page) {
   if (page === 'portfolio') { controlPortalSession = 'portfolio'; page = 'project-control'; }

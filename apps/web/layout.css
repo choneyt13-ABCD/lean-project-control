@@ -575,7 +575,12 @@
 .command-hero h2 { font-size:24px; letter-spacing:-.035em; }
 .command-hero p { max-width:650px; margin:7px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
 .command-hero-actions { display:flex; align-items:end; gap:10px; flex-shrink:0; }
-.command-hero .week-control { min-width:150px; }
+.command-hero .week-control { display:grid; grid-template-columns:30px minmax(142px,1fr); grid-template-areas:"icon label" "icon input"; gap:3px 8px; min-width:202px; padding:9px 10px; border:1px solid #cddfd1; border-radius:11px; background:#fff; box-shadow:0 4px 13px #1730210d; color:#3d5748; }
+.command-hero .week-control::before { content:"📅"; grid-area:icon; display:grid; place-items:center; width:30px; height:30px; margin-top:5px; border-radius:8px; background:#e9f4e8; font-size:15px; }
+.command-hero .week-control > span { grid-area:label; color:#587060; font-size:10px; font-weight:800; letter-spacing:.055em; text-transform:uppercase; }
+.command-hero .week-control input { grid-area:input; min-width:0; padding:0; border:0; border-radius:0; background:transparent; color:#17211b; font-size:14px; font-weight:750; line-height:1.25; box-shadow:none; }
+.command-hero .week-control input:focus { outline:0; color:#215f45; }
+.command-hero .week-control:focus-within { border-color:#75a889; box-shadow:0 0 0 3px #dceee0,0 4px 13px #1730210d; }
 .command-kpis { display:grid; grid-template-columns:1.25fr repeat(3,1fr); gap:12px; margin-bottom:18px; }
 .command-kpis article { min-height:132px; padding:18px; border:1px solid var(--line); border-radius:12px; background:#fff; }
 .command-kpis article > span { display:block; color:var(--muted); font-size:11px; font-weight:750; letter-spacing:.04em; text-transform:uppercase; }

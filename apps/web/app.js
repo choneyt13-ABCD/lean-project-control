@@ -208,7 +208,7 @@ function contextBar(current, projects) {
     `${current.project_type || 'New'} (${current.project_size || 'Medium'})`,
     `PM: ${current.main_pm_name}`
   ].filter(Boolean).join(' &middot; ');
-  return `<section class="project-context"><div class="project-context-summary"><span class="section-kicker">CURRENT PROJECT</span><div class="project-context-title"><span class="project-context-code">${current.project_code}</span><div><strong>${current.project_name}</strong><small>${meta}</small></div></div></div><label class="project-switcher"><span class="project-switcher-heading"><span class="project-switcher-icon" aria-hidden="true">⇄</span><span><strong>Switch project</strong><small>Change active project</small></span></span><select data-project-context>${projects.map((project) => `<option value="${project.project_id}" ${selected(current.project_id, project.project_id)}>${project.project_code} &middot; ${project.project_name} [${project.project_type || 'New'}]</option>`).join('')}</select></label></section>`;
+  return `<section class="project-context"><div class="project-context-summary"><span class="section-kicker">CURRENT PROJECT</span><div class="project-context-title"><span class="project-context-code">${current.project_code}</span><div><strong>${current.project_name}</strong><small>${meta}</small></div></div></div><label class="project-switcher"><span class="project-switcher-heading"><span class="project-switcher-icon" aria-hidden="true">⇄</span><span><strong>Switch project</strong><small>Change active project</small></span></span><select data-project-context><option value="__all__">ทุกโครงการ · ภาพรวมทั้งพอร์ต</option>${projects.map((project) => `<option value="${project.project_id}" ${selected(current.project_id, project.project_id)}>${project.project_code} &middot; ${project.project_name} [${project.project_type || 'New'}]</option>`).join('')}</select></label></section>`;
 }
 
 async function overview() {
@@ -252,12 +252,16 @@ async function overview() {
     <div class="command-item-status">${badge(item.status)}</div>
     <div class="command-item-copy"><span class="code">${escapeHtml(item.owner_name || 'ยังไม่ระบุผู้รับผิดชอบ')}${item.owner_role ? ` · ${escapeHtml(item.owner_role)}` : ''}</span><strong>${escapeHtml(item.plan_title)}</strong><small>เป้าหมาย: ${escapeHtml(item.target_outcome || 'ยังไม่ระบุ')} · ส่ง ${labelDate(item.planned_due_date)}</small></div>
   </article>`;
+  const projectWorkRow = (item) => `<article class="command-item compact">
+    <div class="command-item-status">${taskState(item)}</div>
+    <div class="command-item-copy"><span class="code">${escapeHtml(item.task_code || 'WORK ITEM')} · ${escapeHtml(item.owner_name || 'ยังไม่ระบุผู้รับผิดชอบ')}</span><strong>${escapeHtml(item.task_name)}</strong><small>ส่ง ${labelDate(item.planned_due_date)} · ความคืบหน้า ${Number(item.progress || 0)}%</small></div>
+  </article>`;
 
   content.innerHTML = `${contextBar(current, projects)}
   <section class="command-hero"><div><span class="section-kicker">COMMAND CENTER</span><h2>ภาพรวมเพื่อดำเนินการ</h2><p>เริ่มจากรายการที่มีผลต่อกำหนดส่งก่อน แล้วค่อยติดตามแผนประจำสัปดาห์และความเสี่ยงของโครงการ</p></div><div class="command-hero-actions"><label class="week-control"><span>สัปดาห์เริ่มต้น</span><input type="date" value="${controlWeek}" data-control-week></label><button class="primary" data-open-weekly-plan>+ เพิ่มแผนสัปดาห์</button></div></section>
   <section class="command-kpis" aria-label="สรุปโครงการ"><article><span>ความคืบหน้าโครงการ</span><strong>${progress}%</strong><div class="progress"><span style="width:${progress}%"></span></div><small>เสร็จแล้ว ${completed} จาก ${workItems.length} รายการ</small></article><article class="${needsAttention.length ? 'warn' : ''}"><span>ต้องจัดการ</span><strong>${needsAttention.length}</strong><small>${needsAttention.filter(isOverdue).length} งานเกินกำหนด · ${openRaids.length} RAID เปิดอยู่</small></article><article><span>แผนสัปดาห์นี้</span><strong>${planDone}<em> / ${plans.length}</em></strong><small>งานตามแผนที่เสร็จแล้ว</small></article><article><span>กำหนดสิ้นสุดโครงการ</span><strong class="date-metric">${labelDate(current.target_end_date)}</strong><small>${escapeHtml(current.main_pm_name || 'ยังไม่ระบุ PM')}</small></article></section>
   <div class="command-grid"><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">PRIORITY QUEUE</span><h2>สิ่งที่ต้องดำเนินการ</h2><span class="subtle">เรียงงานติดขัด งานเสี่ยง และงานที่ใกล้กำหนดส่ง</span></div><button class="secondary" data-go="tasks">ดูงานทั้งหมด</button></div>${actionQueue.length ? `<div class="command-list">${actionQueue.map(actionRow).join('')}</div>` : '<p class="empty">ไม่มีงานที่ต้องเร่งจัดการในขณะนี้</p>'}</section>
-  <aside class="command-side"><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">THIS WEEK</span><h2>คำมั่นสัญญาสัปดาห์นี้</h2></div><button class="secondary compact-btn" data-go="updates">จัดการ</button></div>${plans.length ? `<div class="command-list">${plans.slice(0, 4).map(planRow).join('')}</div>` : '<p class="empty">ยังไม่มีแผนสัปดาห์นี้</p>'}</section><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">PROJECT HEALTH</span><h2>สัญญาณที่ต้องติดตาม</h2></div><button class="secondary compact-btn" data-go="raid">เปิด RAID</button></div><div class="health-list"><div><span>งานติดขัด / พัก</span><strong>${openItems.filter((item) => ['Blocked', 'OnHold'].includes(item.status)).length}</strong></div><div><span>งานสถานะแดง</span><strong>${openItems.filter((item) => item.rag_status === 'Red').length}</strong></div><div><span>RAID ที่ยังเปิด</span><strong>${openRaids.length}</strong></div></div></section></aside></div>`;
+  <aside class="command-side"><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">PROJECT SUMMARY</span><h2>งานตามโครงการ</h2><span class="subtle">รายการที่ต้องเตรียมและติดตามในสัปดาห์นี้</span></div><button class="secondary compact-btn" data-go="updates">จัดการ</button></div>${plans.length ? `<div class="command-list">${plans.slice(0, 4).map(planRow).join('')}</div>` : actionQueue.length ? `<div class="command-list">${actionQueue.slice(0, 3).map(projectWorkRow).join('')}</div>` : '<p class="empty">ยังไม่มีงานที่ต้องติดตามในสัปดาห์นี้</p>'}</section><section class="panel command-panel"><div class="panel-head"><div><span class="section-kicker">CARRY OVER & DECISIONS</span><h2>งานยกมาและเรื่องต้องตัดสินใจ</h2><span class="subtle">ทบทวนก่อนเริ่มงานใหม่</span></div><button class="secondary compact-btn" data-go="raid">เปิด RAID</button></div><div class="health-list"><div><span>งานเกินกำหนด</span><strong>${needsAttention.filter(isOverdue).length}</strong></div><div><span>งานติดขัด / สถานะแดง</span><strong>${openItems.filter((item) => ['Blocked', 'OnHold'].includes(item.status) || item.rag_status === 'Red').length}</strong></div><div><span>RAID ที่ยังเปิด</span><strong>${openRaids.length}</strong></div></div></section></aside></div>`;
 }
 
 async function weeklyBrief() {
@@ -2942,6 +2946,16 @@ document.addEventListener('change', (event) => {
   }
   const projectSelector = event.target.closest('[data-project-context]');
   if (projectSelector) {
+    if (projectSelector.value === '__all__') {
+      activeProjectId = null;
+      localStorage.removeItem('lean_active_project_id');
+      controlPortalSession = 'portfolio';
+      localStorage.setItem('lean_control_portal_session', controlPortalSession);
+      tasks = [];
+      showToast('เปิดภาพรวมทุกโครงการแล้ว');
+      navigate('project-control');
+      return;
+    }
     activeProjectId = projectSelector.value;
     localStorage.setItem('lean_active_project_id', activeProjectId);
     tasks = [];

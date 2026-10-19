@@ -2816,8 +2816,8 @@ async function projectControlPortal() {
   content.insertAdjacentHTML('afterbegin', `<section class="portal-nav control-portal-nav"><div><span class="section-kicker">PROJECT PORTAL</span><strong>${labels[controlPortalSession]}</strong><small>${descriptions[controlPortalSession]}</small></div><div class="portal-tabs" aria-label="Project Portal views">${Object.entries(labels).map(([key, label]) => `<button class="${controlPortalSession === key ? 'active' : ''}" data-control-portal-session="${key}">${label}</button>`).join('')}</div></section>`);
 }
 
-const pages = { dashboard: weeklyBrief, 'project-control': projectControlPortal, tasks: workBreakdown, updates: weeklyUpdatesEditable, actions: pmActions, raid: raidEditable, portal: projectPortal, 'weekly-portal': weeklyPortal, audit };
-const pageTitles = { dashboard: 'Weekly operations brief', 'project-control': 'Project portal', tasks: 'Work items', updates: 'Weekly workspace', actions: 'Delivery attention', raid: 'RAID register', portal: 'Project portal setup', 'weekly-portal': 'Weekly Portal', audit: 'Activity log' };
+const pages = { dashboard: overview, 'project-control': projectControlPortal, tasks: workBreakdown, updates: weeklyUpdatesEditable, actions: pmActions, raid: raidEditable, portal: projectPortal, 'weekly-portal': weeklyPortal, audit };
+const pageTitles = { dashboard: 'Project command center', 'project-control': 'Project portal', tasks: 'Work items', updates: 'Weekly workspace', actions: 'Delivery attention', raid: 'RAID register', portal: 'Project portal setup', 'weekly-portal': 'Weekly Portal', audit: 'Activity log' };
 
 async function navigate(page) {
   if (page === 'portfolio') { controlPortalSession = 'portfolio'; page = 'project-control'; }

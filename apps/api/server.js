@@ -315,6 +315,50 @@ db.exec(`CREATE TABLE IF NOT EXISTS project_type_definitions (
 );
 CREATE INDEX IF NOT EXISTS idx_project_type_definitions_sort ON project_type_definitions(sort_order) WHERE deleted_at IS NULL;
 `);
+
+db.exec(`CREATE TABLE IF NOT EXISTS area_definitions (
+  area_id TEXT PRIMARY KEY,
+  area_code TEXT NOT NULL UNIQUE,
+  area_name TEXT NOT NULL,
+  family TEXT NOT NULL CHECK (family IN ('SAP', 'Nonsap')),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TEXT
+);
+CREATE TABLE IF NOT EXISTS project_areas (
+  project_area_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(project_id),
+  area_id TEXT NOT NULL REFERENCES area_definitions(area_id),
+  created_by_person_id TEXT REFERENCES people(person_id),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (project_id, area_id)
+);
+CREATE TABLE IF NOT EXISTS person_area_roles (
+  person_area_role_id TEXT PRIMARY KEY,
+  person_id TEXT NOT NULL REFERENCES people(person_id),
+  area_id TEXT NOT NULL REFERENCES area_definitions(area_id),
+  area_role TEXT NOT NULL CHECK (area_role IN ('PM', 'PMO', 'Member')),
+  created_by_person_id TEXT REFERENCES people(person_id),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (person_id, area_id, area_role)
+);
+CREATE INDEX IF NOT EXISTS idx_project_areas_area ON project_areas(area_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_person_area_roles_person ON person_area_roles(person_id, area_id);
+`);
+const standardAreas = [
+  ['SAP_HC', 'SAP - HC', 'SAP', 1],
+  ['SAP_FICO', 'SAP - FI/CO', 'SAP', 2],
+  ['SAP_MM', 'SAP - MM', 'SAP', 3],
+  ['NONSAP_APPLICATION_OTHERS', 'Nonsap - Application Others', 'Nonsap', 4],
+  ['NONSAP_HC', 'Nonsap - HC', 'Nonsap', 5],
+  ['NONSAP_FICO', 'Nonsap - FI/CO', 'Nonsap', 6],
+  ['NONSAP_MM', 'Nonsap - MM', 'Nonsap', 7]
+];
+const insertArea = db.prepare(`INSERT INTO area_definitions (area_id, area_code, area_name, family, sort_order)
+  VALUES (?, ?, ?, ?, ?) ON CONFLICT(area_code) DO UPDATE SET area_name = excluded.area_name, family = excluded.family, sort_order = excluded.sort_order, deleted_at = NULL`);
+db.transaction(() => standardAreas.forEach(([code, name, family, sort]) => insertArea.run(`area-${code.toLowerCase()}`, code, name, family, sort)))();
 // Seed default project types if table is empty
 if (!db.prepare('SELECT 1 FROM project_type_definitions WHERE deleted_at IS NULL LIMIT 1').get()) {
   const insertType = db.prepare(`INSERT INTO project_type_definitions (type_id, type_name, sort_order, is_default)
@@ -360,6 +404,12 @@ function normalizeProjectRole(roleCode) {
   const normalized = String(roleCode || '').trim();
   if (retiredProjectRoleNames.has(normalized)) return 'TeamMember';
   return legacyProjectRoleMappings.get(normalized) || roleCode;
+}
+
+function personByEmployeeCode(employeeCode) {
+  const normalizedCode = String(employeeCode || '').trim().replace(/^0+(?=\d)/, '');
+  return db.prepare(`SELECT * FROM people WHERE deleted_at IS NULL
+    AND CASE WHEN ltrim(employee_code, '0') = '' THEN '0' ELSE ltrim(employee_code, '0') END = ?`).get(normalizedCode);
 }
 
 function isValidProjectRole(roleCode, projectId) {
@@ -496,7 +546,32 @@ function resolveActor(loginName) {
   const memberships = db.prepare(`SELECT project_id, project_role, is_main_pm FROM project_members
     WHERE person_id = ? AND deleted_at IS NULL AND (active_from IS NULL OR active_from <= date('now'))
       AND (active_to IS NULL OR active_to >= date('now')) ORDER BY project_id, project_role`).all(account.person_id);
-  return { ...account, roles, memberships };
+  const areaAssignments = db.prepare(`SELECT par.area_id, par.area_role, a.area_code, a.area_name, a.family
+    FROM person_area_roles par JOIN area_definitions a ON a.area_id = par.area_id
+    WHERE par.person_id = ? AND a.active = 1 AND a.deleted_at IS NULL
+    ORDER BY a.sort_order, a.area_name`).all(account.person_id);
+  return { ...account, roles, memberships, areaAssignments, isGlobalAdmin: roles.includes('PLATFORM_ADMIN') };
+}
+
+function scopedProjectIds(actor) {
+  if (actor.isGlobalAdmin) return null;
+  const areaProjectIds = db.prepare(`SELECT DISTINCT pa.project_id
+    FROM project_areas pa JOIN person_area_roles par ON par.area_id = pa.area_id
+    WHERE par.person_id = ? AND par.area_role IN ('PM', 'PMO')`).all(actor.person_id).map((row) => row.project_id);
+  const memberProjectIds = actor.memberships.map((membership) => membership.project_id);
+  return [...new Set([...areaProjectIds, ...memberProjectIds])];
+}
+
+function canAccessProject(actor, projectId) {
+  const ids = scopedProjectIds(actor);
+  return ids === null || ids.includes(projectId);
+}
+
+function projectScopeWhere(actor, alias = 'p') {
+  const ids = scopedProjectIds(actor);
+  if (ids === null) return { clause: '1 = 1', params: [] };
+  if (!ids.length) return { clause: '1 = 0', params: [] };
+  return { clause: `${alias}.project_id IN (${ids.map(() => '?').join(', ')})`, params: ids };
 }
 
 let persistTimer = null;
@@ -872,14 +947,12 @@ app.addHook('preHandler', async (request, reply) => {
   if (!actor) return reply.code(401).send({ message: 'No active local demo account matches the configured login.' });
   request.actor = actor;
   const urlPath = request.url.split('?')[0].replace(/\/$/, '');
-  if (urlPath === '/api/workload/all-projects') {
-    // TODO(rbac): Add portfolio/global visibility authorization once RBAC is implemented.
-    // In current local feasibility walkthrough, any authenticated actor can view all projects workload.
+  if (['/api/areas', '/api/session'].includes(urlPath)) {
     return;
   }
+  if (urlPath === '/api/workload/all-projects' && actor.isGlobalAdmin) return;
   const requestedProjectId = typeof request.headers['x-project-id'] === 'string' ? request.headers['x-project-id'] : defaultProjectId;
-  const hasProjectAccess = db.prepare(`SELECT 1 FROM project_members WHERE project_id = ? AND person_id = ? AND deleted_at IS NULL
-    AND (active_from IS NULL OR active_from <= date('now')) AND (active_to IS NULL OR active_to >= date('now'))`).get(requestedProjectId, actor.person_id);
+  const hasProjectAccess = canAccessProject(actor, requestedProjectId);
   if (!hasProjectAccess) return reply.code(403).send({ message: 'You do not have access to the selected project.' });
   request.projectId = requestedProjectId;
 });
@@ -1334,14 +1407,73 @@ app.get('/api/session', async (request) => ({
   demoMode: true
 }));
 
+app.get('/api/areas', async () => db.prepare(`SELECT area_id, area_code, area_name, family, sort_order
+  FROM area_definitions WHERE active = 1 AND deleted_at IS NULL ORDER BY sort_order, area_name`).all());
+
+app.get('/api/project-areas', async (request) => db.prepare(`SELECT pa.project_area_id, pa.project_id,
+  a.area_id, a.area_code, a.area_name, a.family
+  FROM project_areas pa JOIN area_definitions a ON a.area_id = pa.area_id
+  WHERE pa.project_id = ? AND a.active = 1 AND a.deleted_at IS NULL
+  ORDER BY a.sort_order, a.area_name`).all(request.projectId));
+
+app.get('/api/area-scope', async (request) => ({
+  isGlobalAdmin: request.actor.isGlobalAdmin,
+  areas: request.actor.areaAssignments,
+  projectIds: scopedProjectIds(request.actor)
+}));
+
+app.post('/api/project-areas', async (request, reply) => {
+  if (!request.actor.isGlobalAdmin && !request.actor.roles.includes('PM_PMO')) return reply.code(403).send({ message: 'Only Admin or PM/PMO can manage project Areas.' });
+  const body = request.body || {};
+  const projectId = String(body.projectId || '').trim();
+  const areaId = String(body.areaId || '').trim();
+  if (!projectId || !areaId) return reply.code(422).send({ message: 'Project and Area are required.' });
+  const project = db.prepare('SELECT project_id FROM projects WHERE project_id = ? AND deleted_at IS NULL').get(projectId);
+  const area = db.prepare('SELECT area_id FROM area_definitions WHERE area_id = ? AND active = 1 AND deleted_at IS NULL').get(areaId);
+  if (!project || !area) return reply.code(404).send({ message: 'Project or Area was not found.' });
+  const id = randomUUID();
+  db.prepare(`INSERT INTO project_areas (project_area_id, project_id, area_id, created_by_person_id)
+    VALUES (?, ?, ?, ?) ON CONFLICT(project_id, area_id) DO NOTHING`).run(id, projectId, areaId, request.actor.person_id);
+  audit('project_area.create', 'ProjectArea', id, null, { projectId, areaId }, request.actor.person_id);
+  queuePersistToSupabase();
+  return reply.code(201).send({ projectAreaId: id });
+});
+
+app.delete('/api/project-areas/:projectAreaId', async (request, reply) => {
+  if (!request.actor.isGlobalAdmin && !request.actor.roles.includes('PM_PMO')) return reply.code(403).send({ message: 'Only Admin or PM/PMO can manage project Areas.' });
+  const before = db.prepare('SELECT * FROM project_areas WHERE project_area_id = ?').get(request.params.projectAreaId);
+  if (!before) return reply.code(404).send({ message: 'Project Area mapping not found.' });
+  db.prepare('DELETE FROM project_areas WHERE project_area_id = ?').run(before.project_area_id);
+  audit('project_area.delete', 'ProjectArea', before.project_area_id, before, null, request.actor.person_id);
+  queuePersistToSupabase();
+  return reply.code(204).send();
+});
+
+app.post('/api/person-areas', async (request, reply) => {
+  if (!request.actor.isGlobalAdmin && !request.actor.roles.includes('PM_PMO')) return reply.code(403).send({ message: 'Only Admin or PM/PMO can assign Area scope.' });
+  const body = request.body || {};
+  const personId = String(body.personId || '').trim();
+  const areaId = String(body.areaId || '').trim();
+  const areaRole = String(body.areaRole || '').trim();
+  if (!personId || !areaId || !['PM', 'PMO', 'Member'].includes(areaRole)) return reply.code(422).send({ message: 'Person, Area, and a valid Area role are required.' });
+  const person = db.prepare("SELECT person_id FROM people WHERE person_id = ? AND person_status = 'Active' AND deleted_at IS NULL").get(personId);
+  const area = db.prepare('SELECT area_id FROM area_definitions WHERE area_id = ? AND active = 1 AND deleted_at IS NULL').get(areaId);
+  if (!person || !area) return reply.code(404).send({ message: 'Person or Area was not found.' });
+  const id = randomUUID();
+  db.prepare(`INSERT INTO person_area_roles (person_area_role_id, person_id, area_id, area_role, created_by_person_id)
+    VALUES (?, ?, ?, ?, ?) ON CONFLICT(person_id, area_id, area_role) DO NOTHING`).run(id, personId, areaId, areaRole, request.actor.person_id);
+  audit('person_area.create', 'PersonAreaRole', id, null, { personId, areaId, areaRole }, request.actor.person_id);
+  queuePersistToSupabase();
+  return reply.code(201).send({ personAreaRoleId: id });
+});
+
 app.get('/api/portfolio', async (request) => {
+  const scope = projectScopeWhere(request.actor);
   const projects = db.prepare(`SELECT p.*, owner.display_name AS main_pm_name
     FROM projects p JOIN people owner ON owner.person_id = p.main_pm_person_id
-    JOIN project_members pm ON pm.project_id = p.project_id
-    WHERE p.deleted_at IS NULL AND pm.person_id = ? AND pm.deleted_at IS NULL
+    WHERE p.deleted_at IS NULL AND ${scope.clause}
       AND lower(COALESCE(p.project_status, '')) NOT IN ('cancel', 'cancelled')
-      AND (pm.active_from IS NULL OR pm.active_from <= date('now')) AND (pm.active_to IS NULL OR pm.active_to >= date('now'))
-    ORDER BY p.project_code`).all(request.actor.person_id);
+    ORDER BY p.project_code`).all(...scope.params);
   const taskQuery = db.prepare(`SELECT t.task_id, t.task_code, t.task_name, t.task_type, t.status, t.rag_status, t.progress,
     t.planned_due_date, w.wbs_code, owner.display_name AS owner_name
     FROM tasks t JOIN wbs_items w ON w.wbs_item_id = t.wbs_item_id JOIN people owner ON owner.person_id = t.owner_person_id
@@ -1419,12 +1551,13 @@ app.delete('/api/project-types/:typeId', async (request, reply) => {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.get('/api/projects', async (request) => db.prepare(`SELECT p.*, owner.display_name AS main_pm_name
+app.get('/api/projects', async (request) => {
+  const scope = projectScopeWhere(request.actor);
+  return db.prepare(`SELECT p.*, owner.display_name AS main_pm_name
   FROM projects p JOIN people owner ON owner.person_id = p.main_pm_person_id
-  JOIN project_members pm ON pm.project_id = p.project_id
-  WHERE p.deleted_at IS NULL AND pm.person_id = ? AND pm.deleted_at IS NULL
-    AND (pm.active_from IS NULL OR pm.active_from <= date('now')) AND (pm.active_to IS NULL OR pm.active_to >= date('now'))
-  ORDER BY CASE WHEN lower(COALESCE(p.project_status, '')) IN ('cancel', 'cancelled') THEN 1 ELSE 0 END, p.project_code`).all(request.actor.person_id));
+  WHERE p.deleted_at IS NULL AND ${scope.clause}
+  ORDER BY CASE WHEN lower(COALESCE(p.project_status, '')) IN ('cancel', 'cancelled') THEN 1 ELSE 0 END, p.project_code`).all(...scope.params);
+});
 
 
 app.post('/api/projects', async (request, reply) => {
@@ -1813,11 +1946,18 @@ app.post('/api/people', async (request, reply) => {
   if (!body.employeeCode || !body.displayName) return reply.code(422).send({ message: 'Employee code and display name are required.' });
   const assignedProjectRole = normalizeProjectRole(body.projectRole || 'TeamMember');
   if (!isValidProjectRole(assignedProjectRole, request.projectId)) return reply.code(422).send({ message: 'Project role is invalid.' });
-  const existingPerson = db.prepare('SELECT * FROM people WHERE employee_code = ? AND deleted_at IS NULL').get(body.employeeCode);
+  const existingPerson = personByEmployeeCode(body.employeeCode);
   if (existingPerson) {
-    ensureActiveProjectMember(existingPerson.person_id, request.projectId, assignedProjectRole);
-    db.prepare('UPDATE project_members SET project_role = ?, updated_at = CURRENT_TIMESTAMP WHERE project_id = ? AND person_id = ?')
-      .run(assignedProjectRole, request.projectId, existingPerson.person_id);
+    db.transaction(() => {
+      if (body.displayName && body.displayName !== existingPerson.display_name) {
+        db.prepare('UPDATE people SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE person_id = ?')
+          .run(body.displayName, existingPerson.person_id);
+      }
+      ensureActiveProjectMember(existingPerson.person_id, request.projectId, assignedProjectRole);
+      db.prepare('UPDATE project_members SET project_role = ?, updated_at = CURRENT_TIMESTAMP WHERE project_id = ? AND person_id = ?')
+        .run(assignedProjectRole, request.projectId, existingPerson.person_id);
+      audit('people.import_update', 'People', existingPerson.person_id, existingPerson, { ...existingPerson, display_name: body.displayName || existingPerson.display_name }, request.actor.person_id);
+    })();
     return reply.code(201).send({ personId: existingPerson.person_id });
   }
   const id = randomUUID();

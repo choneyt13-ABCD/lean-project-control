@@ -14,6 +14,10 @@ erDiagram
     PEOPLE ||--o{ PROJECTS : main_pm
     PROJECTS ||--o{ PROJECT_MEMBERS : has
     PEOPLE ||--o{ PROJECT_MEMBERS : joins
+    AREA_DEFINITIONS ||--o{ PROJECT_AREAS : groups
+    PROJECTS ||--o{ PROJECT_AREAS : belongs_to
+    PEOPLE ||--o{ PERSON_AREA_ROLES : receives
+    AREA_DEFINITIONS ||--o{ PERSON_AREA_ROLES : scopes
     PROJECTS ||--o{ WBS_ITEMS : contains
     WBS_ITEMS ||--o{ WBS_ITEMS : parent
     PROJECTS ||--o{ TASKS : contains
@@ -57,6 +61,9 @@ erDiagram
     BASELINE_VERSIONS { uuid baseline_version_id PK uuid project_id FK uuid approved_by_person_id FK }
     AUDIT_LOGS { uuid audit_log_id PK uuid actor_person_id FK }
     CUSTOM_FIELD_DEFINITIONS { uuid custom_field_definition_id PK uuid project_id FK }
+    AREA_DEFINITIONS { uuid area_id PK }
+    PROJECT_AREAS { uuid project_area_id PK uuid project_id FK uuid area_id FK }
+    PERSON_AREA_ROLES { uuid person_area_role_id PK uuid person_id FK uuid area_id FK }
 ```
 
 `Evidence` and `Audit Logs` use a polymorphic `related/entity` identifier. A relational foreign key is not possible for all target entity types; API validation must confirm that the referenced entity exists.
@@ -72,6 +79,9 @@ erDiagram
 | `role_permissions` | `role_permission_id` | `role_id`, `permission_id` | Many-to-many role-to-permission mapping. |
 | `projects` | `project_id` | `main_pm_person_id -> people` | Uses `deleted_at`, `deleted_by_person_id`, and `deletion_reason` for soft deletion. |
 | `project_members` | `project_member_id` | `project_id`, `person_id` | Project membership and project role; one active main PM per project. |
+| `area_definitions` | `area_id` | - | SAP/Nonsap business areas used for portfolio visibility. |
+| `project_areas` | `project_area_id` | `project_id`, `area_id` | Maps a project to one or more Areas. |
+| `person_area_roles` | `person_area_role_id` | `person_id`, `area_id` | Maps a person to one or more Areas as PM, PMO, or Member. |
 | `wbs_items` | `wbs_item_id` | `project_id`, optional `parent_wbs_item_id` | WBS hierarchy. |
 | `tasks` | `task_id` | `project_id`, `wbs_item_id`, optional `parent_task_id`, `owner_person_id` | Main Task, Task, and Subtask hierarchy. |
 | `task_assignments` | `task_assignment_id` | `task_id`, `person_id` | Multi-assignee with standard or project-defined assignment role and RACI responsibility. |

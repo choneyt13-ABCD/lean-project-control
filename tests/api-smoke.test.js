@@ -117,6 +117,32 @@ test('resolves active demo accounts and rejects an unknown override', async () =
   assert.equal(unknownResponse.status, 401);
 });
 
+test('supports Area scope mappings and exposes the actor Area assignments', async () => {
+  const areas = await fetch(`${baseUrl}/api/areas`).then((response) => response.json());
+  assert.equal(areas.length, 7);
+  const sapHc = areas.find((area) => area.area_code === 'SAP_HC');
+  assert.ok(sapHc);
+
+  const projectAreaResponse = await fetch(`${baseUrl}/api/project-areas`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ projectId: '30000000-0000-0000-0000-000000000001', areaId: sapHc.area_id })
+  });
+  assert.equal(projectAreaResponse.status, 201);
+
+  const personAreaResponse = await fetch(`${baseUrl}/api/person-areas`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ personId: '20000000-0000-0000-0000-000000000001', areaId: sapHc.area_id, areaRole: 'PM' })
+  });
+  assert.equal(personAreaResponse.status, 201);
+
+  const scope = await fetch(`${baseUrl}/api/area-scope`).then((response) => response.json());
+  assert.equal(scope.isGlobalAdmin, false);
+  assert.ok(scope.areas.some((area) => area.area_code === 'SAP_HC' && area.area_role === 'PM'));
+  assert.ok(scope.projectIds.includes('30000000-0000-0000-0000-000000000001'));
+});
+
 test('uses the resolved request actor for ownership and auditing', async () => {
   const response = await fetch(`${baseUrl}/api/raid`, {
     method: 'POST',

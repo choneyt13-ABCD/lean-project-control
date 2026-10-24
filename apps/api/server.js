@@ -1587,6 +1587,7 @@ app.post('/api/admin/accounts/bootstrap', async (request, reply) => {
         db.prepare(`UPDATE user_accounts SET person_id = ?, login_name = ?, auth_provider = 'LocalPlaceholder', password_hash = ?, account_status = 'Active', must_change_password = 1, updated_at = CURRENT_TIMESTAMP
           WHERE user_account_id = ?`).run(person.person_id, loginName, hashPassword(initialPassword), account.user_account_id);
       }
+      db.prepare('DELETE FROM user_roles WHERE user_account_id = ?').run(account.user_account_id);
       const globalRole = String(item.globalRole || '').trim();
       if (globalRole) {
         const roleId = roleIds.get(globalRole);

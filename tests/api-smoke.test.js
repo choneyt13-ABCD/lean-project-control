@@ -117,6 +117,13 @@ test('resolves active demo accounts and rejects an unknown override', async () =
   assert.equal(unknownResponse.status, 401);
 });
 
+test('protects the global admin overview from project-scoped users', async () => {
+  const response = await fetch(`${baseUrl}/api/admin/overview`);
+  assert.equal(response.status, 403);
+  const payload = await response.json();
+  assert.match(payload.message, /Platform Admin/);
+});
+
 test('supports Area scope mappings and exposes the actor Area assignments', async () => {
   const areas = await fetch(`${baseUrl}/api/areas`).then((response) => response.json());
   assert.equal(areas.length, 7);

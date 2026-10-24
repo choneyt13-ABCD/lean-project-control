@@ -16,6 +16,8 @@ The repository is a working single-user feasibility walkthrough. It is suitable 
 - Task progress, weight, planned-date, and Done/100% validation.
 - Atomic creation of a mock person and their RRMS project membership from the Admin workflow.
 - Local request identity resolution from active `user_accounts`, exposed through `/api/session`.
+- Optional local password login with scrypt-hashed credentials, session tokens, and a configured Platform Admin account.
+- Global Admin overview for Project-to-Area and Person-to-Area assignments.
 - Request-actor ownership and Audit Log attribution instead of hard-coded mutation actors.
 - Project-scoped Workload (`/api/workload`) summarizing capacity, status, due dates, and blockers for the active project.
 - Project-scoped Excel project-plan export from the Work items page. The downloaded workbook contains the selected project's summary, phase hierarchy, each WBS heading with its work items, dates, progress, and Gantt timeline.
@@ -25,7 +27,7 @@ The repository is a working single-user feasibility walkthrough. It is suitable 
 
 ## Remaining Before a Shared Pilot
 
-1. Replace local placeholder identity selection with cryptographically verified authentication from the approved identity provider.
+1. Configure the Render environment with the initial Platform Admin credentials, then replace local password login with the approved identity provider when ready.
 2. Approve and seed the final role-permission mappings, then enforce permission and data scope on every endpoint. Identity resolution is present, but it does not yet grant or deny endpoint access.
 3. Add weekly update review/rejection and review-SLA behavior.
 4. Implement Evidence metadata and Definition of Done enforcement after the evidence approval rule is confirmed.

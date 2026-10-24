@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Project Management Control</title>
-    <link rel="stylesheet" href="/styles.css?v=project-portal-3" />
+    <link rel="stylesheet" href="/styles.css?v=admin-auth-1" />
     <link rel="stylesheet" href="/restored.css?v=layout-2" />
     <link rel="stylesheet" href="/admin.css?v=layout-2" />
     <link rel="stylesheet" href="/modal.css?v=layout-2" />
@@ -14,7 +14,8 @@
     <link rel="stylesheet" href="/timeline.css?v=timeline-2" />
   </head>
   <body>
-    <div class="shell">
+    <div id="auth-root" hidden></div>
+    <div class="shell" id="app-shell" hidden>
       <aside>
         <div class="brand"><span class="brand-mark">PM</span><span class="brand-name">Project Management<br><span class="light">Control</span></span></div>
         <nav>
@@ -22,11 +23,12 @@
           <button class="nav" data-page="project-control">Project portal</button>
           <button class="nav" data-page="tasks">Work items</button>
           <button class="nav" data-page="portal">Project portal setup</button>
+          <button class="nav admin-only" data-page="global-admin" hidden>Admin</button>
           <!-- Temporarily hidden: weekly updates remain available from the project workflow. -->
           <button class="nav" data-page="weekly-portal" hidden>Weekly Portal</button>
           <button class="nav" data-page="audit">Activity log</button>
         </nav>
-        <div class="demo-user"><div class="avatar">PM</div><div><strong>RRMS Demo PM</strong><small>Single-user demo mode</small></div></div>
+        <div class="demo-user"><div class="avatar">PM</div><div><strong>RRMS Demo PM</strong><small>Single-user demo mode</small><button class="sign-out" type="button" data-change-password>Change password</button><button class="sign-out" type="button" data-sign-out>Sign out</button></div></div>
       </aside>
       <main>
         <header><div><p class="eyebrow">PROJECT CONTROL / SINGLE-USER WALKTHROUGH</p><h1 id="page-title">Project overview</h1></div><div class="header-actions"><button class="secondary" id="download-project-plan" type="button" hidden>⇩ Download Excel</button><button class="primary" id="quick-action">+ Add weekly update</button></div></header>
@@ -42,6 +44,6 @@
         new MutationObserver(removeWorkItemBadge).observe(document.body, { childList: true, subtree: true });
       })();
     </script>
-    <script type="module" src="/app.js?v=project-portal-6"></script>
+    <script type="module" src="/app.js?v=admin-auth-1"></script>
   </body>
 </html>

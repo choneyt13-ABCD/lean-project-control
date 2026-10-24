@@ -17,3 +17,15 @@ services:
         value: 10000
       - key: ALLOW_DEMO_IDENTITY_OVERRIDE
         value: "false"
+      - key: AUTH_MODE
+        value: local
+      - key: ADMIN_LOGIN_NAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_DISPLAY_NAME
+        value: Project Control Admin
+      - key: ADMIN_EMPLOYEE_CODE
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false

@@ -28,12 +28,18 @@ try { timelineExpandedProjects = new Set(JSON.parse(localStorage.getItem('lean_t
 let portalSession = localStorage.getItem('lean_portal_session') || 'setup';
 let weeklyPortalSession = localStorage.getItem('lean_weekly_portal_session') || 'weekly';
 let currentTaskGrouping = localStorage.getItem('lean_task_grouping') || 'activity';
+let currentSession = null;
 const collapsedTreeNodes = new Set();
 const collapsedTaskGroups = new Set();
 const collapsedParentTasks = new Set();
 
 const api = (path, options = {}) => {
-  const headers = { ...(activeProjectId ? { 'x-project-id': activeProjectId } : {}), ...(options.headers || {}) };
+  const sessionToken = localStorage.getItem('lean_session_token');
+  const headers = {
+    ...(activeProjectId ? { 'x-project-id': activeProjectId } : {}),
+    ...(sessionToken ? { 'x-session-token': sessionToken } : {}),
+    ...(options.headers || {})
+  };
   // A DELETE request has no JSON payload. Sending a JSON content type anyway
   // makes Fastify try to parse an empty body and prevents the delete handler
   // from running.
@@ -46,7 +52,13 @@ const api = (path, options = {}) => {
   if (raw) {
     try { data = JSON.parse(raw); } catch { data = { message: raw }; }
   }
-  if (!response.ok) throw new Error(data?.message || 'Unable to save data.');
+  if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/auth/')) {
+      localStorage.removeItem('lean_session_token');
+      renderLogin();
+    }
+    throw new Error(data?.message || 'Unable to save data.');
+  }
   return data;
   });
 };
@@ -679,6 +691,20 @@ async function adminEditable() {
   const areaPanel = `<section class="panel"><div class="panel-head"><div><h2>Area visibility</h2><span class="subtle">This project is visible to Admin and to PM/PMO users assigned to its Area.</span></div>${areaScope.isGlobalAdmin ? '<span class="badge purple">Platform Admin</span>' : '<span class="badge blue">Scoped view</span>'}</div><div class="area-scope-grid">${areas.map((area) => { const linked = projectAreas.some((item) => item.area_id === area.area_id); const assigned = areaScope.areas.filter((item) => item.area_id === area.area_id); return `<article class="area-scope-card ${linked ? 'linked' : ''}"><div><strong>${area.area_name}</strong><small>${area.family} · ${area.area_code}</small></div><span class="badge ${linked ? 'green' : 'gray'}">${linked ? 'Project Area' : 'Not linked'}</span><small>${assigned.length ? `${assigned.length} PM/PMO scope assignment${assigned.length > 1 ? 's' : ''}` : 'No PM/PMO assigned to this Area'}</small></article>`; }).join('')}</div></section>`;
   const rolesPanel = `<section class="panel"><div class="panel-head"><div><h2>Team roles (Master data)</h2><span class="subtle">Define project roles, responsibilities, and functional titles.</span></div><div class="row-actions"><button class="secondary" data-seed-roles>Use standard roles</button><button class="primary" data-open-role-master>+ Add team role</button></div></div>${roles.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>ORDER</th><th>CODE</th><th>ROLE NAME</th><th>DESCRIPTION</th><th>MEMBERS</th><th>ACTIONS</th></tr></thead><tbody>${roles.map((role) => `<tr><td>${role.sort_order}</td><td><span class="code inline-code">${role.role_code}</span></td><td><strong>${role.role_name}</strong></td><td>${role.description || '—'}</td><td>${role.member_count}</td><td><div class="row-actions"><button class="secondary" data-edit-role-master="${role.role_id}">Edit</button><button class="secondary" data-delete-role-master="${role.role_id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No team roles defined yet. Add custom roles or use standard templates.</p>'}</section>`;
   content.innerHTML = `${contextBar(current, projects)}<section class="panel"><div class="panel-head"><div><h2>Team members</h2><span class="subtle">Only people assigned to this project appear here and can be selected as an Owner or Assignee.</span></div><div class="row-actions"><button class="secondary" data-open-existing-person>+ Add existing people</button><button class="primary" data-open-person>+ Add person</button></div></div>${people.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>PERSON</th><th>TEAM / ROLE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>${people.map((person) => `<tr><td><strong>${person.display_name}</strong><span class="code">${person.employee_code}</span></td><td>${person.department || 'Not specified'}<small class="cell-note">${person.project_role || 'No role'}${person.position_title ? ` &middot; ${person.position_title}` : ''}</small></td><td>${badge(person.person_status)}</td><td>${actions('person', person.person_id)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No project members yet. Add existing people or create a new person.</p>'}</section>${areaPanel}${rolesPanel}<section class="panel"><div class="panel-head"><div><h2>Current assignments</h2><span class="subtle">One work item can have multiple contributors.</span></div><button class="primary" data-open-assignment>+ Assign work</button></div>${assignments.length ? `<div class="assignment-list">${assignments.map((assignment) => `<article class="assignment-item"><div class="assignment-icon">${assignment.task_code.slice(-2)}</div><div><span class="code">${assignment.task_code}</span><strong>${assignment.task_name}</strong><small>${assignment.display_name}</small></div>${badge(assignment.assignment_role)}${actions('assignment', assignment.task_assignment_id)}</article>`).join('')}</div>` : '<p class="empty">No assignments yet.</p>'}</section>`;
+}
+
+async function globalAdminView() {
+  const data = await api('/admin/overview');
+  const areaOptions = data.areas.map((area) => `<option value="${escapeHtml(area.area_id)}">${escapeHtml(area.area_name)}</option>`).join('');
+  const projectRows = data.projects.map((project) => {
+    const mappings = data.projectAreas.filter((item) => item.project_id === project.project_id);
+    return `<tr><td><strong>${escapeHtml(project.project_code)}</strong><small>${escapeHtml(project.project_name)}</small></td><td>${escapeHtml(project.main_pm_name)}</td><td>${mappings.length ? mappings.map((item) => `<span class="badge green mapping-chip">${escapeHtml(item.area_name)} <button type="button" data-admin-remove-project-area="${item.project_area_id}" aria-label="Remove ${escapeHtml(item.area_name)}">×</button></span>`).join(' ') : '<span class="badge gray">ยังไม่กำหนด</span>'}</td><td><div class="inline-form"><select data-admin-project-area-select="${project.project_id}" aria-label="Area for ${escapeHtml(project.project_code)}"><option value="">เลือก Area</option>${areaOptions}</select><button class="secondary compact-btn" data-admin-add-project-area="${project.project_id}">เพิ่ม</button></div></td></tr>`;
+  }).join('');
+  const personRows = data.people.map((person) => {
+    const mappings = data.personAreas.filter((item) => item.person_id === person.person_id);
+    return `<tr><td><strong>${escapeHtml(person.display_name)}</strong><small>${escapeHtml(person.employee_code)}</small></td><td>${mappings.length ? mappings.map((item) => `<span class="badge blue mapping-chip">${escapeHtml(item.area_name)} · ${escapeHtml(item.area_role)} <button type="button" data-admin-remove-person-area="${item.person_area_role_id}" aria-label="Remove ${escapeHtml(item.area_name)}">×</button></span>`).join(' ') : '<span class="badge gray">ยังไม่กำหนด</span>'}</td><td><div class="inline-form"><select data-admin-person-select aria-label="Person"><option value="">เลือกคน</option>${data.people.map((item) => `<option value="${escapeHtml(item.person_id)}">${escapeHtml(item.display_name)} · ${escapeHtml(item.employee_code)}</option>`).join('')}</select><select data-admin-person-area-select aria-label="Area"><option value="">เลือก Area</option>${areaOptions}</select><select data-admin-person-role-select aria-label="Area role"><option value="PM">PM</option><option value="PMO">PMO</option><option value="Member">Member</option></select><button class="secondary compact-btn" data-admin-add-person-area>เพิ่ม</button></div></td></tr>`;
+  }).join('');
+  content.innerHTML = `<section class="admin-hero"><div><span class="section-kicker">PLATFORM ADMIN</span><h2>จัดการ Project และ Area</h2><p>Admin เห็นทุก Project และกำหนด Area รวมถึง PM/PMO ที่รับผิดชอบได้จากหน้านี้</p></div><span class="badge purple">Global visibility</span></section><section class="panel"><div class="panel-head"><div><h2>Project Area mapping</h2><span class="subtle">กำหนด Area ให้แต่ละ Project ได้มากกว่าหนึ่ง Area หากเป็นโครงการข้ามสายงาน</span></div></div><div class="table-wrap"><table class="table admin-mapping-table"><thead><tr><th>PROJECT</th><th>MAIN PM</th><th>AREAS</th><th>เพิ่ม Area</th></tr></thead><tbody>${projectRows || '<tr><td colspan="4" class="empty">ยังไม่มี Project</td></tr>'}</tbody></table></div></section><section class="panel"><div class="panel-head"><div><h2>PM / PMO Area assignment</h2><span class="subtle">กำหนดสิทธิ์การมองเห็นให้ PM, PMO หรือ Member ตาม Area</span></div></div><div class="table-wrap"><table class="table admin-mapping-table"><thead><tr><th>PERSON</th><th>ASSIGNED AREAS</th><th>เพิ่ม Assignment</th></tr></thead><tbody>${personRows || '<tr><td colspan="3" class="empty">ยังไม่มี User</td></tr>'}</tbody></table></div></section>`;
 }
 
 async function audit() {
@@ -2824,8 +2850,8 @@ async function projectControlPortal() {
   content.insertAdjacentHTML('afterbegin', `<section class="portal-nav control-portal-nav"><div><span class="section-kicker">PROJECT PORTAL</span><strong>${labels[controlPortalSession]}</strong><small>${descriptions[controlPortalSession]}</small></div><div class="portal-tabs" aria-label="Project Portal views">${Object.entries(labels).map(([key, label]) => `<button class="${controlPortalSession === key ? 'active' : ''}" data-control-portal-session="${key}">${label}</button>`).join('')}</div></section>`);
 }
 
-const pages = { dashboard: overview, 'project-control': projectControlPortal, tasks: workBreakdown, updates: weeklyUpdatesEditable, actions: pmActions, raid: raidEditable, portal: projectPortal, 'weekly-portal': weeklyPortal, audit };
-const pageTitles = { dashboard: 'Project command center', 'project-control': 'Project portal', tasks: 'Work items', updates: 'Weekly workspace', actions: 'Delivery attention', raid: 'RAID register', portal: 'Project portal setup', 'weekly-portal': 'Weekly Portal', audit: 'Activity log' };
+const pages = { dashboard: overview, 'project-control': projectControlPortal, tasks: workBreakdown, updates: weeklyUpdatesEditable, actions: pmActions, raid: raidEditable, portal: projectPortal, 'weekly-portal': weeklyPortal, audit, 'global-admin': globalAdminView };
+const pageTitles = { dashboard: 'Project command center', 'project-control': 'Project portal', tasks: 'Work items', updates: 'Weekly workspace', actions: 'Delivery attention', raid: 'RAID register', portal: 'Project portal setup', 'weekly-portal': 'Weekly Portal', audit: 'Activity log', 'global-admin': 'Admin' };
 
 async function navigate(page) {
   if (page === 'portfolio') { controlPortalSession = 'portfolio'; page = 'project-control'; }
@@ -3217,15 +3243,101 @@ quickAction.addEventListener('click', () => weeklyModal());
 document.addEventListener('click', (event) => {
   if (event.target.closest('[data-download-project-plan]')) downloadProjectPlan();
 });
+function renderLogin(message = '') {
+  const shell = document.querySelector('#app-shell');
+  const root = document.querySelector('#auth-root');
+  if (shell) shell.hidden = true;
+  if (!root) return;
+  root.hidden = false;
+  root.innerHTML = `<main class="login-shell"><section class="login-card"><div class="brand login-brand"><span class="brand-mark">PM</span><span>Project Management <strong>Control</strong></span></div><span class="section-kicker">INTERNAL PILOT</span><h1>เข้าสู่ระบบ</h1><p class="subtle">ใช้ Login name และ Password ของระบบ</p>${message ? `<div class="import-errors">${escapeHtml(message)}</div>` : ''}<form id="login-form"><label>Login name<input name="loginName" autocomplete="username" required autofocus></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button class="primary" type="submit">Sign in</button></form></section></main>`;
+  root.querySelector('#login-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('button');
+    button.disabled = true;
+    try {
+      const values = Object.fromEntries(new FormData(event.currentTarget));
+      const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(values) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      localStorage.setItem('lean_session_token', payload.token);
+      await initialize();
+    } catch (error) {
+      button.disabled = false;
+      renderLogin(error.message);
+    }
+  });
+}
+
+document.addEventListener('click', async (event) => {
+  const changePassword = event.target.closest('[data-change-password]');
+  if (changePassword) {
+    modalContent.innerHTML = '<h2 class="form-title">Change password</h2><div class="form-grid"><label class="full">Current password<input name="currentPassword" type="password" required></label><label class="full">New password<input name="newPassword" type="password" minlength="8" required></label></div><div class="actions"><button class="secondary" value="cancel">Cancel</button><button class="primary">Save password</button></div>';
+    form.onsubmit = async (submitEvent) => {
+      submitEvent.preventDefault();
+      try { await api('/auth/change-password', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) }); modal.close(); showToast('Password changed.'); } catch (error) { showToast(error.message); }
+    };
+    return modal.showModal();
+  }
+  const signOut = event.target.closest('[data-sign-out]');
+  if (!signOut) return;
+  await fetch('/api/auth/logout', { method: 'POST', headers: { 'x-session-token': localStorage.getItem('lean_session_token') || '' } }).catch(() => {});
+  localStorage.removeItem('lean_session_token');
+  renderLogin();
+});
+
+document.addEventListener('click', async (event) => {
+  const addProjectArea = event.target.closest('[data-admin-add-project-area]');
+  const removeProjectArea = event.target.closest('[data-admin-remove-project-area]');
+  const addPersonArea = event.target.closest('[data-admin-add-person-area]');
+  const removePersonArea = event.target.closest('[data-admin-remove-person-area]');
+  try {
+    if (addProjectArea) {
+      const projectId = addProjectArea.dataset.adminAddProjectArea;
+      const select = document.querySelector(`[data-admin-project-area-select="${projectId}"]`);
+      if (!select?.value) return showToast('กรุณาเลือก Area');
+      await api('/project-areas', { method: 'POST', body: JSON.stringify({ projectId, areaId: select.value }) });
+      showToast('กำหนด Area ให้ Project แล้ว.');
+      return navigate('global-admin');
+    }
+    if (removeProjectArea) {
+      await api(`/project-areas/${removeProjectArea.dataset.adminRemoveProjectArea}`, { method: 'DELETE' });
+      showToast('ยกเลิก Area ของ Project แล้ว.');
+      return navigate('global-admin');
+    }
+    if (addPersonArea) {
+      const row = addPersonArea.closest('tr');
+      const personId = row.querySelector('[data-admin-person-select]').value;
+      const areaId = row.querySelector('[data-admin-person-area-select]').value;
+      const areaRole = row.querySelector('[data-admin-person-role-select]').value;
+      if (!personId || !areaId) return showToast('กรุณาเลือก User และ Area');
+      await api('/person-areas', { method: 'POST', body: JSON.stringify({ personId, areaId, areaRole }) });
+      showToast('กำหนด Area ให้ User แล้ว.');
+      return navigate('global-admin');
+    }
+    if (removePersonArea) {
+      await api(`/person-areas/${removePersonArea.dataset.adminRemovePersonArea}`, { method: 'DELETE' });
+      showToast('ยกเลิก Area ของ User แล้ว.');
+      return navigate('global-admin');
+    }
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
 async function initialize() {
   try {
     const session = await api('/session');
+    currentSession = session;
+    document.querySelector('#auth-root').hidden = true;
+    document.querySelector('#app-shell').hidden = false;
     document.querySelector('.demo-user strong').textContent = session.displayName;
     document.querySelector('.demo-user small').textContent = `${session.roles.join(', ') || 'No role'} · local demo identity`;
+    document.querySelectorAll('.admin-only').forEach((item) => { item.hidden = !session.isGlobalAdmin; });
     startNotificationPolling();
     await navigate('dashboard');
   } catch (error) {
-    content.innerHTML = `<section class="panel"><h2>Unable to start local session</h2><p class="subtle">${error.message}</p></section>`;
+    localStorage.removeItem('lean_session_token');
+    renderLogin();
   }
 }
 

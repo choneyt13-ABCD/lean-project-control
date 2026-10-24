@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -347,6 +347,9 @@ CREATE TABLE IF NOT EXISTS person_area_roles (
 CREATE INDEX IF NOT EXISTS idx_project_areas_area ON project_areas(area_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_person_area_roles_person ON person_area_roles(person_id, area_id);
 `);
+if (!db.prepare('PRAGMA table_info(user_accounts)').all().some((column) => column.name === 'must_change_password')) {
+  db.exec('ALTER TABLE user_accounts ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+}
 const standardAreas = [
   ['SAP_HC', 'SAP - HC', 'SAP', 1],
   ['SAP_FICO', 'SAP - FI/CO', 'SAP', 2],
@@ -379,6 +382,9 @@ const defaultProjectId = '30000000-0000-0000-0000-000000000001';
 const secondProjectId = '30000000-0000-0000-0000-000000000002';
 const defaultDemoLogin = process.env.DEMO_LOGIN_NAME || 'rrms.demo.pm';
 const allowDemoIdentityOverride = process.env.ALLOW_DEMO_IDENTITY_OVERRIDE === 'true';
+const authMode = (process.env.AUTH_MODE || (process.env.NODE_ENV === 'production' ? 'local' : 'demo')).toLowerCase();
+const sessionTtlMs = 8 * 60 * 60 * 1000;
+const sessions = new Map();
 const assignmentRoles = new Set(['Owner', 'DEV', 'Reviewer', 'Contributor', 'Observer']);
 const projectRoles = new Set(['PM', 'ProjectAdmin', 'DEVLead', 'TeamMember', 'Reviewer', 'Owner']);
 const taskStatuses = new Set(['NotStarted', 'InProgress', 'OnHold', 'Blocked', 'Done', 'Cancelled']);
@@ -535,7 +541,7 @@ function seedStandardRoles(projectId) {
 }
 
 function resolveActor(loginName) {
-  const account = db.prepare(`SELECT ua.user_account_id, ua.login_name, ua.auth_provider, p.person_id, p.display_name
+  const account = db.prepare(`SELECT ua.user_account_id, ua.login_name, ua.auth_provider, ua.must_change_password, p.person_id, p.display_name
     FROM user_accounts ua JOIN people p ON p.person_id = ua.person_id
     WHERE lower(ua.login_name) = lower(?) AND ua.account_status = 'Active' AND ua.deleted_at IS NULL
       AND p.person_status = 'Active' AND p.deleted_at IS NULL`).get(loginName);
@@ -552,6 +558,58 @@ function resolveActor(loginName) {
     ORDER BY a.sort_order, a.area_name`).all(account.person_id);
   return { ...account, roles, memberships, areaAssignments, isGlobalAdmin: roles.includes('PLATFORM_ADMIN') };
 }
+
+function hashPassword(password) {
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 64);
+  return `scrypt$${salt.toString('base64')}$${hash.toString('base64')}`;
+}
+
+function verifyPassword(password, encoded) {
+  const [algorithm, saltText, hashText] = String(encoded || '').split('$');
+  if (algorithm !== 'scrypt' || !saltText || !hashText) return false;
+  try {
+    const salt = Buffer.from(saltText, 'base64');
+    const expected = Buffer.from(hashText, 'base64');
+    const actual = scryptSync(password, salt, expected.length);
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+
+function ensureConfiguredAdminAccount() {
+  const loginName = String(process.env.ADMIN_LOGIN_NAME || '').trim();
+  const password = String(process.env.ADMIN_PASSWORD || '');
+  if (!loginName || !password) return;
+  const displayName = String(process.env.ADMIN_DISPLAY_NAME || 'Project Control Admin').trim();
+  const employeeCode = String(process.env.ADMIN_EMPLOYEE_CODE || `ADMIN-${loginName}`).trim();
+  const email = String(process.env.ADMIN_EMAIL || `${loginName}@local.invalid`).trim();
+  const platformRole = db.prepare("SELECT role_id FROM roles WHERE role_code = 'PLATFORM_ADMIN'").get();
+  if (!platformRole) throw new Error('PLATFORM_ADMIN role is not seeded.');
+  let person = db.prepare('SELECT * FROM people WHERE lower(email) = lower(?) OR employee_code = ? LIMIT 1').get(email, employeeCode);
+  if (!person) {
+    person = { person_id: randomUUID() };
+    db.prepare(`INSERT INTO people (person_id, employee_code, display_name, email, department, position_title)
+      VALUES (?, ?, ?, ?, ?, ?)`).run(person.person_id, employeeCode, displayName, email, 'Project Control', 'Administrator');
+  } else {
+    db.prepare(`UPDATE people SET employee_code = ?, display_name = ?, email = ?, person_status = 'Active', updated_at = CURRENT_TIMESTAMP
+      WHERE person_id = ?`).run(employeeCode, displayName, email, person.person_id);
+  }
+  let account = db.prepare('SELECT * FROM user_accounts WHERE lower(login_name) = lower(?) LIMIT 1').get(loginName);
+  if (!account) {
+    account = { user_account_id: randomUUID() };
+    db.prepare(`INSERT INTO user_accounts (user_account_id, person_id, login_name, auth_provider, password_hash, account_status, must_change_password)
+      VALUES (?, ?, ?, 'LocalPlaceholder', ?, 'Active', 1)`).run(account.user_account_id, person.person_id, loginName, hashPassword(password));
+  } else {
+    db.prepare(`UPDATE user_accounts SET person_id = ?, password_hash = ?, auth_provider = 'LocalPlaceholder', account_status = 'Active', must_change_password = 1, updated_at = CURRENT_TIMESTAMP
+      WHERE user_account_id = ?`).run(person.person_id, hashPassword(password), account.user_account_id);
+  }
+  db.prepare(`INSERT OR IGNORE INTO user_roles (user_role_id, user_account_id, role_id)
+    VALUES (?, ?, ?)`).run(randomUUID(), account.user_account_id, platformRole.role_id);
+}
+
+ensureConfiguredAdminAccount();
 
 function scopedProjectIds(actor) {
   if (actor.isGlobalAdmin) return null;
@@ -931,6 +989,8 @@ app.decorateRequest('actor', null);
 app.decorateRequest('projectId', null);
 app.addHook('preHandler', async (request, reply) => {
   if (!request.url.startsWith('/api/')) return;
+  const urlPath = request.url.split('?')[0].replace(/\/$/, '');
+  if (['/api/auth/login', '/api/auth/logout'].includes(urlPath)) return;
   // API secret key guard: when API_SECRET_KEY is set, every /api/* request must
   // supply a matching Authorization: Bearer <key> header. Skip check when not set
   // so local dev and smoke tests work without any extra configuration.
@@ -941,12 +1001,19 @@ app.addHook('preHandler', async (request, reply) => {
       return reply.code(401).send({ message: 'Unauthorized.' });
     }
   }
+  const sessionToken = request.headers['x-session-token'];
+  const session = authMode === 'local' && typeof sessionToken === 'string' ? sessions.get(sessionToken) : null;
+  if (authMode === 'local' && (!session || session.expiresAt < Date.now())) {
+    if (sessionToken) sessions.delete(sessionToken);
+    return reply.code(401).send({ message: 'Please sign in.' });
+  }
   const requestedLogin = request.headers['x-demo-login'];
-  const loginName = allowDemoIdentityOverride && typeof requestedLogin === 'string' ? requestedLogin : defaultDemoLogin;
+  const loginName = authMode === 'local'
+    ? session.loginName
+    : (allowDemoIdentityOverride && typeof requestedLogin === 'string' ? requestedLogin : defaultDemoLogin);
   const actor = resolveActor(loginName);
-  if (!actor) return reply.code(401).send({ message: 'No active local demo account matches the configured login.' });
+  if (!actor) return reply.code(401).send({ message: 'No active account matches this session.' });
   request.actor = actor;
-  const urlPath = request.url.split('?')[0].replace(/\/$/, '');
   if (['/api/areas', '/api/session'].includes(urlPath)) {
     return;
   }
@@ -1397,6 +1464,57 @@ app.post('/api/imports/commit', async (request, reply) => {
   return { message: mode === 'replace' ? 'Template imported and prior structure was archived.' : 'Matching work items were updated and new items were added.', ...result };
 });
 
+function sessionPayload(actor) {
+  return {
+    loginName: actor.login_name,
+    authProvider: actor.auth_provider,
+    personId: actor.person_id,
+    displayName: actor.display_name,
+    roles: actor.roles,
+    memberships: actor.memberships,
+    isGlobalAdmin: actor.isGlobalAdmin,
+    mustChangePassword: Boolean(actor.must_change_password),
+    demoMode: authMode !== 'local'
+  };
+}
+
+app.post('/api/auth/login', async (request, reply) => {
+  if (authMode !== 'local') return reply.code(409).send({ message: 'Local login is not enabled.' });
+  const body = request.body || {};
+  const loginName = String(body.loginName || '').trim();
+  const password = String(body.password || '');
+  if (!loginName || !password) return reply.code(422).send({ message: 'Login name and password are required.' });
+  const account = db.prepare(`SELECT ua.*, p.person_status, p.deleted_at AS person_deleted_at
+    FROM user_accounts ua JOIN people p ON p.person_id = ua.person_id
+    WHERE lower(ua.login_name) = lower(?) AND ua.account_status = 'Active' AND ua.deleted_at IS NULL`).get(loginName);
+  if (!account || account.person_status !== 'Active' || account.person_deleted_at || !verifyPassword(password, account.password_hash)) {
+    return reply.code(401).send({ message: 'Login name or password is incorrect.' });
+  }
+  const actor = resolveActor(account.login_name);
+  const token = randomBytes(32).toString('hex');
+  sessions.set(token, { loginName: account.login_name, expiresAt: Date.now() + sessionTtlMs });
+  db.prepare('UPDATE user_accounts SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE user_account_id = ?').run(account.user_account_id);
+  return { token, session: sessionPayload(actor) };
+});
+
+app.post('/api/auth/logout', async (request) => {
+  const token = request.headers['x-session-token'];
+  if (token) sessions.delete(token);
+  return { message: 'Signed out.' };
+});
+
+app.post('/api/auth/change-password', async (request, reply) => {
+  if (authMode !== 'local') return reply.code(409).send({ message: 'Local login is not enabled.' });
+  const body = request.body || {};
+  const currentPassword = String(body.currentPassword || '');
+  const newPassword = String(body.newPassword || '');
+  const account = db.prepare("SELECT password_hash FROM user_accounts WHERE person_id = ? AND account_status = 'Active' AND deleted_at IS NULL").get(request.actor.person_id);
+  if (!account || !verifyPassword(currentPassword, account.password_hash)) return reply.code(401).send({ message: 'Current password is incorrect.' });
+  if (newPassword.length < 8) return reply.code(422).send({ message: 'New password must be at least 8 characters.' });
+  db.prepare('UPDATE user_accounts SET password_hash = ?, must_change_password = 0, updated_at = CURRENT_TIMESTAMP WHERE person_id = ?').run(hashPassword(newPassword), request.actor.person_id);
+  return { message: 'Password changed.' };
+});
+
 app.get('/api/session', async (request) => ({
   loginName: request.actor.login_name,
   authProvider: request.actor.auth_provider,
@@ -1404,7 +1522,8 @@ app.get('/api/session', async (request) => ({
   displayName: request.actor.display_name,
   roles: request.actor.roles,
   memberships: request.actor.memberships,
-  demoMode: true
+  isGlobalAdmin: request.actor.isGlobalAdmin,
+  demoMode: authMode !== 'local'
 }));
 
 app.get('/api/areas', async () => db.prepare(`SELECT area_id, area_code, area_name, family, sort_order
@@ -1421,6 +1540,66 @@ app.get('/api/area-scope', async (request) => ({
   areas: request.actor.areaAssignments,
   projectIds: scopedProjectIds(request.actor)
 }));
+
+app.get('/api/admin/overview', async (request, reply) => {
+  if (!request.actor.isGlobalAdmin) return reply.code(403).send({ message: 'Platform Admin access is required.' });
+  const areas = db.prepare(`SELECT area_id, area_code, area_name, family, sort_order
+    FROM area_definitions WHERE active = 1 AND deleted_at IS NULL ORDER BY sort_order, area_name`).all();
+  const projects = db.prepare(`SELECT p.project_id, p.project_code, p.project_name, p.project_status,
+    COALESCE(pm.display_name, 'ยังไม่ระบุ PM') AS main_pm_name,
+    COALESCE(GROUP_CONCAT(DISTINCT a.area_id), '') AS area_ids,
+    COALESCE(GROUP_CONCAT(DISTINCT a.area_name), '') AS area_names
+    FROM projects p
+    LEFT JOIN people pm ON pm.person_id = p.main_pm_person_id
+    LEFT JOIN project_areas pa ON pa.project_id = p.project_id
+    LEFT JOIN area_definitions a ON a.area_id = pa.area_id AND a.active = 1 AND a.deleted_at IS NULL
+    WHERE p.deleted_at IS NULL GROUP BY p.project_id ORDER BY p.project_code`).all();
+  const people = db.prepare(`SELECT p.person_id, p.employee_code, p.display_name
+    FROM people p WHERE p.deleted_at IS NULL AND p.person_status = 'Active' ORDER BY p.display_name`).all();
+  const projectAreas = db.prepare(`SELECT pa.project_area_id, pa.project_id, pa.area_id, a.area_name
+    FROM project_areas pa JOIN area_definitions a ON a.area_id = pa.area_id
+    WHERE a.active = 1 AND a.deleted_at IS NULL ORDER BY a.sort_order, a.area_name`).all();
+  const personAreas = db.prepare(`SELECT par.person_area_role_id, par.person_id, par.area_id, par.area_role, a.area_name
+    FROM person_area_roles par JOIN area_definitions a ON a.area_id = par.area_id
+    WHERE a.active = 1 AND a.deleted_at IS NULL ORDER BY a.sort_order, a.area_name`).all();
+  return { areas, projects, people, projectAreas, personAreas };
+});
+
+app.post('/api/admin/accounts/bootstrap', async (request, reply) => {
+  if (!request.actor.isGlobalAdmin) return reply.code(403).send({ message: 'Platform Admin access is required.' });
+  const body = request.body || {};
+  const initialPassword = String(body.initialPassword || '');
+  const accounts = Array.isArray(body.accounts) ? body.accounts : [];
+  if (initialPassword.length < 8 || !accounts.length) return reply.code(422).send({ message: 'Initial password and accounts are required.' });
+  const roleIds = new Map(db.prepare('SELECT role_code, role_id FROM roles').all().map((role) => [role.role_code, role.role_id]));
+  const results = [];
+  db.transaction(() => {
+    for (const item of accounts) {
+      const person = personByEmployeeCode(item.employeeCode);
+      if (!person) throw new Error(`Person ${item.employeeCode} was not found.`);
+      const loginName = String(item.loginName || String(item.employeeCode).replace(/^0+(?=\d)/, '')).trim();
+      let account = db.prepare('SELECT * FROM user_accounts WHERE lower(login_name) = lower(?) OR person_id = ? LIMIT 1').get(loginName, person.person_id);
+      if (!account) {
+        account = { user_account_id: randomUUID() };
+        db.prepare(`INSERT INTO user_accounts (user_account_id, person_id, login_name, auth_provider, password_hash, account_status, must_change_password)
+          VALUES (?, ?, ?, 'LocalPlaceholder', ?, 'Active', 1)`).run(account.user_account_id, person.person_id, loginName, hashPassword(initialPassword));
+      } else {
+        db.prepare(`UPDATE user_accounts SET person_id = ?, login_name = ?, auth_provider = 'LocalPlaceholder', password_hash = ?, account_status = 'Active', must_change_password = 1, updated_at = CURRENT_TIMESTAMP
+          WHERE user_account_id = ?`).run(person.person_id, loginName, hashPassword(initialPassword), account.user_account_id);
+      }
+      const globalRole = String(item.globalRole || '').trim();
+      if (globalRole) {
+        const roleId = roleIds.get(globalRole);
+        if (!roleId) throw new Error(`Role ${globalRole} was not found.`);
+        db.prepare('INSERT OR IGNORE INTO user_roles (user_role_id, user_account_id, role_id) VALUES (?, ?, ?)').run(randomUUID(), account.user_account_id, roleId);
+      }
+      results.push({ employeeCode: person.employee_code, loginName, globalRole: globalRole || null });
+    }
+  })();
+  audit('accounts.bootstrap', 'UserAccount', null, null, { count: results.length }, request.actor.person_id);
+  queuePersistToSupabase();
+  return { total: results.length, results };
+});
 
 app.post('/api/project-areas', async (request, reply) => {
   if (!request.actor.isGlobalAdmin && !request.actor.roles.includes('PM_PMO')) return reply.code(403).send({ message: 'Only Admin or PM/PMO can manage project Areas.' });
@@ -1465,6 +1644,16 @@ app.post('/api/person-areas', async (request, reply) => {
   audit('person_area.create', 'PersonAreaRole', id, null, { personId, areaId, areaRole }, request.actor.person_id);
   queuePersistToSupabase();
   return reply.code(201).send({ personAreaRoleId: id });
+});
+
+app.delete('/api/person-areas/:personAreaRoleId', async (request, reply) => {
+  if (!request.actor.isGlobalAdmin && !request.actor.roles.includes('PM_PMO')) return reply.code(403).send({ message: 'Only Admin or PM/PMO can manage Area scope.' });
+  const before = db.prepare('SELECT * FROM person_area_roles WHERE person_area_role_id = ?').get(request.params.personAreaRoleId);
+  if (!before) return reply.code(404).send({ message: 'Person Area mapping not found.' });
+  db.prepare('DELETE FROM person_area_roles WHERE person_area_role_id = ?').run(before.person_area_role_id);
+  audit('person_area.delete', 'PersonAreaRole', before.person_area_role_id, before, null, request.actor.person_id);
+  queuePersistToSupabase();
+  return reply.code(204).send();
 });
 
 app.get('/api/portfolio', async (request) => {

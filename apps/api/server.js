@@ -556,7 +556,7 @@ function resolveActor(loginName) {
     FROM person_area_roles par JOIN area_definitions a ON a.area_id = par.area_id
     WHERE par.person_id = ? AND a.active = 1 AND a.deleted_at IS NULL
     ORDER BY a.sort_order, a.area_name`).all(account.person_id);
-  return { ...account, roles, memberships, areaAssignments, isGlobalAdmin: roles.includes('PLATFORM_ADMIN') };
+  return { ...account, roles, memberships, areaAssignments, isGlobalAdmin: roles.includes('PLATFORM_ADMIN'), isAllAreaPmo: roles.includes('PMO_ALL_AREAS') };
 }
 
 function hashPassword(password) {
@@ -577,6 +577,13 @@ function verifyPassword(password, encoded) {
     return false;
   }
 }
+
+function ensureGlobalAreaRole() {
+  db.prepare(`INSERT OR IGNORE INTO roles (role_id, role_code, role_name, scope_type, is_system_role)
+    VALUES (?, 'PMO_ALL_AREAS', 'PMO - All Areas', 'Portfolio', 1)`).run('10000000-0000-0000-0000-000000000003');
+}
+
+ensureGlobalAreaRole();
 
 function ensureConfiguredAdminAccount() {
   const loginName = String(process.env.ADMIN_LOGIN_NAME || '').trim();
@@ -612,7 +619,7 @@ function ensureConfiguredAdminAccount() {
 ensureConfiguredAdminAccount();
 
 function scopedProjectIds(actor) {
-  if (actor.isGlobalAdmin) return null;
+  if (actor.isGlobalAdmin || actor.roles.includes('PMO_ALL_AREAS')) return null;
   const areaProjectIds = db.prepare(`SELECT DISTINCT pa.project_id
     FROM project_areas pa JOIN person_area_roles par ON par.area_id = pa.area_id
     WHERE par.person_id = ? AND par.area_role IN ('PM', 'PMO')`).all(actor.person_id).map((row) => row.project_id);
@@ -1473,6 +1480,7 @@ function sessionPayload(actor) {
     roles: actor.roles,
     memberships: actor.memberships,
     isGlobalAdmin: actor.isGlobalAdmin,
+    isAllAreaPmo: actor.isAllAreaPmo,
     mustChangePassword: Boolean(actor.must_change_password),
     demoMode: authMode !== 'local'
   };
@@ -1562,7 +1570,13 @@ app.get('/api/admin/overview', async (request, reply) => {
   const personAreas = db.prepare(`SELECT par.person_area_role_id, par.person_id, par.area_id, par.area_role, a.area_name
     FROM person_area_roles par JOIN area_definitions a ON a.area_id = par.area_id
     WHERE a.active = 1 AND a.deleted_at IS NULL ORDER BY a.sort_order, a.area_name`).all();
-  return { areas, projects, people, projectAreas, personAreas };
+  const allAreaPeople = db.prepare(`SELECT DISTINCT p.person_id
+    FROM people p JOIN user_accounts ua ON ua.person_id = p.person_id
+    JOIN user_roles ur ON ur.user_account_id = ua.user_account_id
+    JOIN roles r ON r.role_id = ur.role_id
+    WHERE p.person_status = 'Active' AND p.deleted_at IS NULL AND ua.account_status = 'Active'
+      AND r.role_code = 'PMO_ALL_AREAS'`).all().map((row) => row.person_id);
+  return { areas, projects, people, projectAreas, personAreas, allAreaPeople };
 });
 
 app.post('/api/admin/accounts/bootstrap', async (request, reply) => {
@@ -1645,6 +1659,29 @@ app.post('/api/person-areas', async (request, reply) => {
   audit('person_area.create', 'PersonAreaRole', id, null, { personId, areaId, areaRole }, request.actor.person_id);
   queuePersistToSupabase();
   return reply.code(201).send({ personAreaRoleId: id });
+});
+
+app.post('/api/pmo-all-areas', async (request, reply) => {
+  if (!request.actor.isGlobalAdmin && !request.actor.roles.includes('PM_PMO')) return reply.code(403).send({ message: 'Only Admin or PM/PMO can assign All Areas scope.' });
+  const personId = String((request.body || {}).personId || '').trim();
+  const person = db.prepare("SELECT person_id FROM people WHERE person_id = ? AND person_status = 'Active' AND deleted_at IS NULL").get(personId);
+  const role = db.prepare("SELECT role_id FROM roles WHERE role_code = 'PMO_ALL_AREAS'").get();
+  const account = db.prepare("SELECT user_account_id FROM user_accounts WHERE person_id = ? AND account_status = 'Active' AND deleted_at IS NULL").get(personId);
+  if (!person || !account || !role) return reply.code(404).send({ message: 'Active user or role was not found.' });
+  db.prepare('INSERT OR IGNORE INTO user_roles (user_role_id, user_account_id, role_id) VALUES (?, ?, ?)').run(randomUUID(), account.user_account_id, role.role_id);
+  audit('pmo_all_areas.create', 'UserRole', account.user_account_id, null, { personId }, request.actor.person_id);
+  queuePersistToSupabase();
+  return reply.code(201).send({ personId, role: 'PMO_ALL_AREAS' });
+});
+
+app.delete('/api/pmo-all-areas/:personId', async (request, reply) => {
+  if (!request.actor.isGlobalAdmin && !request.actor.roles.includes('PM_PMO')) return reply.code(403).send({ message: 'Only Admin or PM/PMO can remove All Areas scope.' });
+  const account = db.prepare("SELECT user_account_id FROM user_accounts WHERE person_id = ? AND account_status = 'Active' AND deleted_at IS NULL").get(request.params.personId);
+  const role = db.prepare("SELECT role_id FROM roles WHERE role_code = 'PMO_ALL_AREAS'").get();
+  if (!account || !role) return reply.code(404).send({ message: 'Active user or role was not found.' });
+  db.prepare('DELETE FROM user_roles WHERE user_account_id = ? AND role_id = ?').run(account.user_account_id, role.role_id);
+  queuePersistToSupabase();
+  return reply.code(204).send();
 });
 
 app.delete('/api/person-areas/:personAreaRoleId', async (request, reply) => {

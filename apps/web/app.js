@@ -702,7 +702,8 @@ async function globalAdminView() {
   }).join('');
   const personRows = data.people.map((person) => {
     const mappings = data.personAreas.filter((item) => item.person_id === person.person_id);
-    return `<tr><td><strong>${escapeHtml(person.display_name)}</strong><small>${escapeHtml(person.employee_code)}</small></td><td>${mappings.length ? mappings.map((item) => `<span class="badge blue mapping-chip">${escapeHtml(item.area_name)} · ${escapeHtml(item.area_role)} <button type="button" data-admin-remove-person-area="${item.person_area_role_id}" aria-label="Remove ${escapeHtml(item.area_name)}">×</button></span>`).join(' ') : '<span class="badge gray">ยังไม่กำหนด</span>'}</td><td><div class="inline-form"><select data-admin-person-area-select aria-label="Area"><option value="">เลือก Area</option>${areaOptions}</select><select data-admin-person-role-select aria-label="Area role"><option value="PM">PM</option><option value="PMO">PMO</option><option value="Member">Member</option></select><button class="secondary compact-btn" data-admin-add-person-area="${escapeHtml(person.person_id)}">เพิ่ม</button></div></td></tr>`;
+    const hasAllAreaAccess = data.allAreaPeople.includes(person.person_id);
+    return `<tr><td><strong>${escapeHtml(person.display_name)}</strong><small>${escapeHtml(person.employee_code)}</small></td><td>${hasAllAreaAccess ? '<span class="badge purple mapping-chip">All Areas · PMO <button type="button" data-admin-remove-all-areas="' + escapeHtml(person.person_id) + '" aria-label="Remove All Areas">×</button></span>' : ''}${mappings.length ? mappings.map((item) => `<span class="badge blue mapping-chip">${escapeHtml(item.area_name)} · ${escapeHtml(item.area_role)} <button type="button" data-admin-remove-person-area="${item.person_area_role_id}" aria-label="Remove ${escapeHtml(item.area_name)}">×</button></span>`).join(' ') : (!hasAllAreaAccess ? '<span class="badge gray">ยังไม่กำหนด</span>' : '')}</td><td><div class="inline-form"><select data-admin-person-area-select aria-label="Area"><option value="">เลือก Area</option><option value="__ALL_AREAS__">All Areas (PMO)</option>${areaOptions}</select><select data-admin-person-role-select aria-label="Area role"><option value="PM">PM</option><option value="PMO">PMO</option><option value="Member">Member</option></select><button class="secondary compact-btn" data-admin-add-person-area="${escapeHtml(person.person_id)}">เพิ่ม</button></div></td></tr>`;
   }).join('');
   content.innerHTML = `<section class="admin-hero"><div><span class="section-kicker">PLATFORM ADMIN</span><h2>จัดการ Project และ Area</h2><p>Admin เห็นทุก Project และกำหนด Area รวมถึง PM/PMO ที่รับผิดชอบได้จากหน้านี้</p></div><span class="badge purple">Global visibility</span></section><section class="panel"><div class="panel-head"><div><h2>Project Area mapping</h2><span class="subtle">กำหนด Area ให้แต่ละ Project ได้มากกว่าหนึ่ง Area หากเป็นโครงการข้ามสายงาน</span></div></div><div class="table-wrap"><table class="table admin-mapping-table"><thead><tr><th>PROJECT</th><th>MAIN PM</th><th>AREAS</th><th>เพิ่ม Area</th></tr></thead><tbody>${projectRows || '<tr><td colspan="4" class="empty">ยังไม่มี Project</td></tr>'}</tbody></table></div></section><section class="panel"><div class="panel-head"><div><h2>PM / PMO Area assignment</h2><span class="subtle">กำหนดสิทธิ์การมองเห็นให้ PM, PMO หรือ Member ตาม Area</span></div></div><div class="table-wrap"><table class="table admin-mapping-table"><thead><tr><th>PERSON</th><th>ASSIGNED AREAS</th><th>เพิ่ม Assignment</th></tr></thead><tbody>${personRows || '<tr><td colspan="3" class="empty">ยังไม่มี User</td></tr>'}</tbody></table></div></section>`;
 }
@@ -3290,6 +3291,7 @@ document.addEventListener('click', async (event) => {
   const removeProjectArea = event.target.closest('[data-admin-remove-project-area]');
   const addPersonArea = event.target.closest('[data-admin-add-person-area]');
   const removePersonArea = event.target.closest('[data-admin-remove-person-area]');
+  const removeAllAreas = event.target.closest('[data-admin-remove-all-areas]');
   try {
     if (addProjectArea) {
       const projectId = addProjectArea.dataset.adminAddProjectArea;
@@ -3310,6 +3312,11 @@ document.addEventListener('click', async (event) => {
       const areaId = row.querySelector('[data-admin-person-area-select]').value;
       const areaRole = row.querySelector('[data-admin-person-role-select]').value;
       if (!personId || !areaId) return showToast('กรุณาเลือก User และ Area');
+      if (areaId === '__ALL_AREAS__') {
+        await api('/pmo-all-areas', { method: 'POST', body: JSON.stringify({ personId }) });
+        showToast('PMO All Areas access granted.');
+        return navigate('global-admin');
+      }
       await api('/person-areas', { method: 'POST', body: JSON.stringify({ personId, areaId, areaRole }) });
       showToast('กำหนด Area ให้ User แล้ว.');
       return navigate('global-admin');
@@ -3317,6 +3324,11 @@ document.addEventListener('click', async (event) => {
     if (removePersonArea) {
       await api(`/person-areas/${removePersonArea.dataset.adminRemovePersonArea}`, { method: 'DELETE' });
       showToast('ยกเลิก Area ของ User แล้ว.');
+      return navigate('global-admin');
+    }
+    if (removeAllAreas) {
+      await api(`/pmo-all-areas/${removeAllAreas.dataset.adminRemoveAllAreas}`, { method: 'DELETE' });
+      showToast('PMO All Areas access removed.');
       return navigate('global-admin');
     }
   } catch (error) {

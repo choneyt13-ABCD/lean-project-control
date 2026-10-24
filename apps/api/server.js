@@ -1665,6 +1665,7 @@ app.post('/api/pmo-all-areas', async (request, reply) => {
   if (!request.actor.isGlobalAdmin && !request.actor.roles.includes('PM_PMO')) return reply.code(403).send({ message: 'Only Admin or PM/PMO can assign All Areas scope.' });
   const personId = String((request.body || {}).personId || '').trim();
   const person = db.prepare("SELECT person_id FROM people WHERE person_id = ? AND person_status = 'Active' AND deleted_at IS NULL").get(personId);
+  ensureGlobalAreaRole();
   const role = db.prepare("SELECT role_id FROM roles WHERE role_code = 'PMO_ALL_AREAS'").get();
   const account = db.prepare("SELECT user_account_id FROM user_accounts WHERE person_id = ? AND account_status = 'Active' AND deleted_at IS NULL").get(personId);
   if (!person || !account || !role) return reply.code(404).send({ message: 'Active user or role was not found.' });

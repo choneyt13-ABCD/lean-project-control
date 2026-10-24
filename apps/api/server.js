@@ -580,7 +580,7 @@ function verifyPassword(password, encoded) {
 
 function ensureGlobalAreaRole() {
   db.prepare(`INSERT OR IGNORE INTO roles (role_id, role_code, role_name, scope_type, is_system_role)
-    VALUES (?, 'PMO_ALL_AREAS', 'PMO - All Areas', 'Portfolio', 1)`).run('10000000-0000-0000-0000-000000000003');
+    VALUES (?, 'PMO_ALL_AREAS', 'PMO - All Areas', 'Portfolio', 1)`).run('10000000-0000-0000-0000-000000000009');
 }
 
 ensureGlobalAreaRole();

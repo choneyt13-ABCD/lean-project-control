@@ -358,7 +358,7 @@ ON CONFLICT (task_status_code) DO NOTHING;
 INSERT INTO roles (role_id, role_code, role_name, scope_type, is_system_role) VALUES
 ('10000000-0000-0000-0000-000000000001', 'PLATFORM_ADMIN', 'Platform Admin', 'Platform', true),
 ('10000000-0000-0000-0000-000000000002', 'PM_PMO', 'PM/PMO', 'Portfolio', true),
-('10000000-0000-0000-0000-000000000003', 'PMO_ALL_AREAS', 'PMO - All Areas', 'Portfolio', true),
+('10000000-0000-0000-0000-000000000009', 'PMO_ALL_AREAS', 'PMO - All Areas', 'Portfolio', true),
 ('10000000-0000-0000-0000-000000000003', 'PROJECT_ADMIN', 'Project Admin', 'Project', true),
 ('10000000-0000-0000-0000-000000000004', 'BA_LEAD', 'BA Lead', 'Workstream', true),
 ('10000000-0000-0000-0000-000000000005', 'DEV_LEAD', 'DEV Lead', 'Workstream', true),

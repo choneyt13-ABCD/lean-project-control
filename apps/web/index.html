@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="/workload-controls.css?v=workload-controls-3" />
     <link rel="stylesheet" href="/timeline.css?v=timeline-2" />
     <link rel="stylesheet" href="/styles.css?v=navy-blue-theme-final-2" />
-    <link rel="stylesheet" href="/theme-blue.css?v=navy-blue-login-2" />
+    <link rel="stylesheet" href="/theme-blue.css?v=account-card-1" />
   </head>
   <body>
     <div id="auth-root" hidden></div>
@@ -30,7 +30,7 @@
           <button class="nav" data-page="weekly-portal" hidden>Weekly Portal</button>
           <button class="nav" data-page="audit">Activity log</button>
         </nav>
-        <div class="demo-user"><div class="avatar">PM</div><div><strong>RRMS Demo PM</strong><small>Single-user demo mode</small><button class="sign-out" type="button" data-change-password>Change password</button><button class="sign-out" type="button" data-sign-out>Sign out</button></div></div>
+        <section class="demo-user" aria-label="Signed-in account"><div class="account-summary"><div class="avatar">PM</div><div class="account-copy"><span class="account-label">SIGNED IN AS</span><strong>RRMS Demo PM</strong><small>Single-user demo mode</small></div></div><div class="account-actions"><button class="account-action" type="button" data-change-password>Change password</button><button class="account-action sign-out" type="button" data-sign-out>Sign out</button></div></section>
       </aside>
       <main>
         <header><div><p class="eyebrow">PROJECT CONTROL / SINGLE-USER WALKTHROUGH</p><h1 id="page-title">Project overview</h1></div><div class="header-actions"><button class="secondary" id="download-project-plan" type="button" hidden>⇩ Download Excel</button><button class="primary" id="quick-action">+ Add weekly update</button></div></header>

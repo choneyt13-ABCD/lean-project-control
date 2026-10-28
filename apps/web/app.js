@@ -3247,7 +3247,10 @@ document.addEventListener('click', (event) => {
 function renderLogin(message = '') {
   const shell = document.querySelector('#app-shell');
   const root = document.querySelector('#auth-root');
-  if (shell) shell.hidden = true;
+  if (shell) {
+    shell.hidden = true;
+    shell.style.display = 'none';
+  }
   if (!root) return;
   root.hidden = false;
   root.innerHTML = `<main class="login-shell"><section class="login-card"><aside class="login-visual"><div class="brand login-brand"><span class="brand-mark">PM</span><span>Project <strong>Control</strong><small>RRMS workspace</small></span></div><div class="login-visual-copy"><span class="login-kicker">PROJECT CONTROL CENTER</span><h2>บริหารโครงการ<br>ในมุมมองเดียว</h2><p>ติดตามโครงการ งาน แผนรายสัปดาห์ และสิทธิ์ตาม Area สำหรับทีมของคุณ</p></div><div class="login-features"><span>ภาพรวมทุกโครงการ</span><span>สิทธิ์ตาม Area</span><span>ติดตามงานและสถานะ</span></div></aside><div class="login-form-panel"><span class="section-kicker">INTERNAL WORKSPACE</span><h1>ยินดีต้อนรับ</h1><p class="subtle">เข้าสู่ระบบเพื่อเริ่มทำงานใน Project Control</p>${message ? `<div class="import-errors">${escapeHtml(message)}</div>` : ''}<form id="login-form"><label>Login name<input name="loginName" autocomplete="username" placeholder="เช่น 13955" required autofocus></label><label>Password<input name="password" type="password" autocomplete="current-password" placeholder="กรอกรหัสผ่าน" required></label><button class="primary" type="submit">เข้าสู่ระบบ</button></form><p class="subtle login-help">หากยังเข้าสู่ระบบไม่ได้ กรุณาติดต่อผู้ดูแลระบบ</p></div></section></main>`;
@@ -3341,7 +3344,9 @@ async function initialize() {
     const session = await api('/session');
     currentSession = session;
     document.querySelector('#auth-root').hidden = true;
-    document.querySelector('#app-shell').hidden = false;
+    const shell = document.querySelector('#app-shell');
+    shell.hidden = false;
+    shell.style.removeProperty('display');
     document.querySelector('.demo-user strong').textContent = session.displayName;
     document.querySelector('.demo-user small').textContent = `${session.roles.join(', ') || 'No role'} · local demo identity`;
     document.querySelectorAll('.admin-only').forEach((item) => { item.hidden = !session.isGlobalAdmin; });
